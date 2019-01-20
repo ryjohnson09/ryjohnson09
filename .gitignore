@@ -5,3 +5,7 @@
 blogdown
 .DS_Store # if a windows user, Thumbs.db instead
 public/
+blogdown.epub
+blogdown.pdf
+content/.DS_Store
+content/post/.DS_Store

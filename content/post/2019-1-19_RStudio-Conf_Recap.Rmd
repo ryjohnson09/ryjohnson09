@@ -1,0 +1,31 @@
+---
+title: "RStudio Conference Recap"
+author: "Ryan Johnson"
+date: 2019-1-19
+categories: ["R"]
+tags: ["RStudio Conference"]
+---
+```{r, include=FALSE}
+library(emo)
+```
+
+
+To start my first ever blog post, I should mention that I am not a data scientist. I'm a microbiologis by training. But like many scientific fields, microbiology is becominge more data-centric. Every day (it seems), new technologies emerge that generate tons of data including genome sequencing and microarrays. About 7 months ago, I was hired by a research group that contracted out numerous samples to be sequenced/analyzed and they were sitting on the data because they had 0 clue how to analyze it. And that's why they hired me!
+
+Throughout my schooling, I've been very fortunate to attend lots of great, and not so great conferences that conform to a traditional "science" conference style...wake up, listen to scientists talk about their research, go to bed. Now don't get me wrong, a lot of talks I've heard have been incredibly engaging and I leave the conference inspired to try new things in my own lab. Unfortunately, this is not always the case. There are a few conference faux pas that really turn me off:
+
+1. The speaker goes way too deep into the knitty gritty of their research, that I get lost within 5 minutes.
+1. The speaker is very defensive about their work. When they speak, they bash other research groups and/or tout their research as the very best.
+1. The audience becomes defensive. When speakers (especially young scientist) talk about their work, their sometimes is an audience member (or two) that works in a similar field that publicly grills the presenter. This really makes me squirm in my seat.
+
+Research funding makes microbiology inherintly competitive...and I think that's what drives a lot of this hostility I just described. Luckily, it is becoming increasingly rare to witness the points above at conferences. But, what I experienced at RStudio Conference was...**different**. And different in the best way possible. In no particular order, here's what I loved about RStudio Conference 2019:
+
+1. It's no secret that the R community is one of, if not the most friendly, loving, inclusive, and helpful scientific communities, and these qualities shined brightly in Austion over the past week. There was no badgering of questions, no one laughed at programming "newbies", and there were no exlusive groups or "big wig" gatherings that made members feel lonely. Simply put, it was friendly and refreshing. I'm not sure I was ever as excited as I was to wake up every morning and head down stairs to start mingling with my fellow `r emo::ji("nerd_face")`'s.
+
+1. The presenters were great because the goal of pretty much every talk I heard was to present a tool/workflow/resource to help the community, not to "show off". You have no idea how eager I am to just tinker around with the new pacakges I learned about over the past week (I'm actually trying out the `here` package while high in the sky on my flight home!).
+
+1. The entertainment/food was spot on. We were *NOT* served greasy food that would put even the most eager R user to sleep during a Hadley talk. The food was awesome...especially the morning overnight oats, and I'm not even an oats kinda guy. AND THEY HAD A FREE CONCERT!!! And it was a legit concert at (what I was told) one of the coolest venues in Austin.
+
+1. Lastly, while not officially part of the conference, the workshops were great. I took the Intermediate Shiny workshop (fantastic!), and I heard nothing but great things about all of the other workshops. If you have the time, spend the extra cash and take a workshop and learn from the best!
+
+Thank you RStudio for putting on a fantastic conference and I look forward to next year's conference in San Fran `r emo::ji("smiley")`!
