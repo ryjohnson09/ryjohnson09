@@ -29,3 +29,5 @@ Research funding makes microbiology inherintly competitive...and I think that's 
 1. Lastly, while not officially part of the conference, the workshops were great. I took the Intermediate Shiny workshop (fantastic!), and I heard nothing but great things about all of the other workshops. If you have the time, spend the extra cash and take a workshop and learn from the best!
 
 Thank you RStudio for putting on a fantastic conference and I look forward to next year's conference in San Fran `r emo::ji("smiley")`!
+
+{{ partial "disqus.html" . }}
