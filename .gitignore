@@ -9,3 +9,6 @@ blogdown.epub
 blogdown.pdf
 content/.DS_Store
 content/post/.DS_Store
+static/.DS_Store
+static/*/.DS_Store
+.DS_Store
