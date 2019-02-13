@@ -127,7 +127,7 @@ After doing a bit of research, here is a bare-bones manuscript Rmarkdown file th
 
 ![](../../static/post/2019-02-12_Scientific_Paper/manuscript.png)
 
-So of this may seem self-explanatory, but other not so much. So first, let's understand what I did for references...
+Much of this may seem self-explanatory, but some stuff not so much. So first, let's understand what I did for references...
 
 # Adding References
 
