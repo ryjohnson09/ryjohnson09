@@ -1,9 +1,12 @@
 ---
-title: "Writing a Scientific Paper in Rmarkdown"
-author: "Ryan Johnson"
-date: "2019-2-12"
-tags: Rmarkdown
-categories: R
+title: Writing a Scientific Paper in Rmarkdown
+author: Ryan Johnson
+date: '2019-01-19'
+slug: how-to-make-a-heatmap-in-r
+categories:
+  - R
+tags:
+  - Rmarkdown
 ---
 
 ```{r, include=FALSE}
