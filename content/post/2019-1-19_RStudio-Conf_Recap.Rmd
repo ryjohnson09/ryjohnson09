@@ -1,7 +1,7 @@
 ---
 title: "RStudio Conference Recap"
 author: "Ryan Johnson"
-date: 2019-1-19
+date: '2019-1-19'
 categories: ["R"]
 tags: ["RStudio Conference"]
 ---

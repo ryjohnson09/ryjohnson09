@@ -1,8 +1,8 @@
 ---
 title: Writing a Scientific Paper in Rmarkdown
 author: Ryan Johnson
-date: '2019-01-19'
-slug: how-to-make-a-heatmap-in-r
+date: '2019-02-13'
+slug: writing-a-scientifi-paper-in-Rmarkdown
 categories:
   - R
 tags:
