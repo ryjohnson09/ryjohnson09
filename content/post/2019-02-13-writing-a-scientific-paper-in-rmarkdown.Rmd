@@ -2,13 +2,15 @@
 title: Writing a Scientific Paper in Rmarkdown
 author: Ryan Johnson
 date: '2019-02-13'
-slug: writing-a-scientifi-paper-in-Rmarkdown
+slug: writing-a-scientific-paper-in-rmarkdown
 categories:
   - R
 tags:
   - Rmarkdown
+image:
+  caption: ''
+  focal_point: ''
 ---
-
 ```{r, include=FALSE}
 library(emo)
 ```
@@ -36,7 +38,7 @@ Now while I do like that ability to place code directly into the manuscript, I a
 
 Here is what my directory now looks like:
 
-![](../../static/post/2019-02-12_Scientific_Paper/dir_tree_1.png)
+![](/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/dir_tree_1.png)
 
 # The Data
 
@@ -128,7 +130,7 @@ ggsave(plot = iris_plot, filename = "results/figures/fig1.png")
 
 After doing a bit of research, here is a bare-bones manuscript Rmarkdown file that I think will satisfy my needs:
 
-![](../../static/post/2019-02-12_Scientific_Paper/manuscript.png)
+![](/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/manuscript.png)
 
 Much of this may seem self-explanatory, but some stuff not so much. So first, let's understand what I did for references...
 
@@ -136,7 +138,7 @@ Much of this may seem self-explanatory, but some stuff not so much. So first, le
 
 And now for a part that can be very complicated...adding references. It seems to me that the best way to organize your references is to place them into a **BibTex** document. I've pulled a few of my own papers from google scholar and converted them to BibTex format by selecting them and then exporting as BibTex:
 
-![](../../static/post/2019-02-12_Scientific_Paper/bibtex.png)
+![](/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/bibtex.png)
 
 I then saved the resulting file as `my_refs.bibtex`:
 
@@ -184,15 +186,15 @@ This is pretty straightforward, feed the path to your png image to the `knitr::i
 
 Now, this is what my directory now looks like:
 
-![](../../static/post/2019-02-12_Scientific_Paper/dir_tree_2.png)
+![](/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/dir_tree_2.png)
 
 To publish the manuscript to a word document, click on arrow next to the `knitr` button and select `Knit to Word`. This will create a word document of your final manuscript! Mine looks like this:
 
-![](../../static/post/2019-02-12_Scientific_Paper/word_1.png)
+![](/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/word_1.png)
 
-![](../../static/post/2019-02-12_Scientific_Paper/word_2.png)
+![](/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/word_2.png)
 
-![](../../static/post/2019-02-12_Scientific_Paper/word_3.png)
+![](/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/word_3.png)
 
 
 # Automating with makefile
@@ -203,7 +205,7 @@ If you're not familiar with makefiles (and I'm very much a novice), Pat Schloss 
 
 I created a file called `makefile` and placed it in my main directory. Here is what mine looks like:
 
-![](../../static/post/2019-02-12_Scientific_Paper/makefile.png)
+![](/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/makefile.png)
 
 Key points with makefile:
 
@@ -213,7 +215,7 @@ Key points with makefile:
 
 Then, once your in your home directory, you can open the terminal and type `make manuscript.docx`. If all runs smoothly you should see this in your console:
 
-![](../../static/post/2019-02-12_Scientific_Paper/make_output.png)
+![](/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/make_output.png)
 
 Now here is the cool part...if you make any changes to say the code for figure 1, or code for table 1...or ANY dependency for the manuscript, the make command will rerun that code and make sure it's up to date and then will generate a new manuscript for you!
 

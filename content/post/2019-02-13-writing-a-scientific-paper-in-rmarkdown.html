@@ -1,0 +1,202 @@
+---
+title: Writing a Scientific Paper in Rmarkdown
+author: Ryan Johnson
+date: '2019-02-13'
+slug: writing-a-scientific-paper-in-rmarkdown
+categories:
+  - R
+tags:
+  - Rmarkdown
+image:
+  caption: ''
+  focal_point: ''
+---
+
+
+
+<p>I’m gearing up to write a scientific manuscript and I want to try Rmarkdown for this. I’ve never used anything but Microsoft Word to write my manuscripts, and EndNote to manage my references. While I’m excited to try this out, I think the biggest challenge is going to be sharing my drafts with collaborators so that they can make edits (typically with <em>track changes</em> in microsoft word). Here are some of the key points that need to be addressed as I start researching methods for drafting manuscripts in Rmarkdown:</p>
+<ul>
+<li><p><strong>Needs to be reproducible.</strong> This is a given since I will be generating the manuscript using code, but I want to explore all the ways in which I can make elements of the paper reproducible/automated including table/figure generation, in-line code chunks, formatting, etc.</p></li>
+<li><p><strong>Needs to have an output compatable with Microsoft Word</strong>. While I don’t necessarily like this point, it’s a must as 99.99% of my collaborators will not know how to make edits to a Rmarkdown doc. Additionally, the <em>track changes</em> feature in word is the go-to for most scientists.</p></li>
+<li><p><strong>An efficient and flexible reference manager</strong>. I know this is possible, just not aware of all the options currently available. Needs to be able to switch formats depending on the journal.</p></li>
+<li><p><strong>No major dependencies on LaTex.</strong> This is a personal limitation as my work computer does not have admin rights, so I can’t install MacTex or Latex. But I think I can get away without using it…but I suppose we’ll find out 😬.</p></li>
+</ul>
+<div id="setting-up-the-file-structure" class="section level1">
+<h1>Setting up the File Structure</h1>
+<p>I first created a new directory on my desktop, and within it I created a new R project called <code>test_manuscript.Rproj</code>.</p>
+<p>Then I want to have a few subdirectories here. Once I will call <code>/data</code> and within it I will have <code>/data/processed</code> and <code>/data/raw</code>. The <strong>raw</strong> directory will contain the primary data files and once they have been cleaned/fixed up and are ready to be analyzed, I will place them into the <strong>processed</strong> directory. Each processing step should have a script associated with it. So let’s also creat a <code>code/</code> directory.</p>
+<p>Now while I do like that ability to place code directly into the manuscript, I actually prefer to have separate scripts that do this, and place the resulting figures in a spearate directory. So let’s create a <code>/results</code> directory, and within it we can have <code>/results/figures</code> and <code>/results/tables</code>.</p>
+<p>Here is what my directory now looks like:</p>
+<div class="figure">
+<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/dir_tree_1.png" />
+
+</div>
+</div>
+<div id="the-data" class="section level1">
+<h1>The Data</h1>
+<p>As a mock example, I will use the data from the <code>iris</code> data set. I ran the following command just to get an actual csv file into the <code>data/raw</code> directory:</p>
+<pre class="r"><code>library(tidyverse)
+write_csv(x = iris, path = &quot;data/raw/iris_data.csv&quot;)</code></pre>
+<p>Now this data is already pretty clean, but just to demonstrate what I imagine my typical workflow would be…let’s create a script and place it in the <code>code/</code> directory that will analyze the iris data and spit out a new csv file that will be placed into the <code>data/processed</code> directory. Here is the script:</p>
+<pre><code># Name: extract_setosa_versicolor.R
+# Author: Ryan Johnson
+# Date created: 12 February 2019
+# Purpose: Extract the Setosa and Versicolor species
+#   of flowers from the iris_data.csv data
+
+library(tidyverse)
+
+## Read in Data ------------------------
+iris_data &lt;- read_csv(&quot;data/raw/iris_data.csv&quot;)
+
+## Select Setosa and Versicolor -------------
+iris_select &lt;- iris_data %&gt;% 
+  filter(Species %in% c(&quot;setosa&quot;, &quot;versicolor&quot;))
+
+## Write to processed
+write_csv(x = iris_select,
+          path = &quot;data/processed/setosa_versicolor.csv&quot;)</code></pre>
+<p>Let’s now make a dummy table. Unfortunately, this is going to be the hardest part to automate. I’ve tried a bunch of ways to get nice png image of tables, but for right now I will generage scripts that produce html files. I’ll have to manually open them up and save them as screen shots. Kinda stinks but it’s not like I will have hundreds of tables…likely just a handful. I know there are packages out there (like <code>gt</code>…which I like to use) that is working on implementing png exportable tables.</p>
+<pre><code># Name: create_table1.R
+# Author: Ryan Johnson
+# Date: 12 February 2019
+# Purpose: Generate table 1
+
+library(tidyverse)
+library(gt)
+library(htmltools)
+
+
+## Read in data -----------------------------------------------
+iris_select &lt;- read_csv(&quot;data/processed/setosa_versicolor.csv&quot;)
+
+
+## Generate gt table ------------------------------------------
+table_1 &lt;- iris_select %&gt;% 
+  group_by(Species) %&gt;% 
+  summarise(mean_sepal_width = mean(Sepal.Width),
+            mean_sepal_length = mean(Sepal.Length)) %&gt;% 
+  gt() %&gt;% 
+  as_raw_html(inline_css = TRUE)
+
+
+## Export table into results/tables ---------------------------
+write_file(table_1, &quot;results/tables/table1.html&quot;)</code></pre>
+<p>And finally let’s make a dummy figure.</p>
+<pre><code># Name: create_fig1.R
+# Author: Ryan Johnson
+# Date: 12 February 2019
+# Purpose: Generate figure 1
+
+library(tidyverse)
+
+## Read in data -----------------------------------------------
+iris_select &lt;- read_csv(&quot;data/processed/setosa_versicolor.csv&quot;)
+
+
+## Create Figure -----------------------------------------------
+iris_plot &lt;- ggplot(data = iris_select, aes(x = Sepal.Length, y = Sepal.Width)) +
+  geom_point(aes(color = Species))
+
+
+## Save Plot -----------------------------------------------
+ggsave(plot = iris_plot, filename = &quot;results/figures/fig1.png&quot;)</code></pre>
+</div>
+<div id="the-manuscript" class="section level1">
+<h1>The Manuscript</h1>
+<p>After doing a bit of research, here is a bare-bones manuscript Rmarkdown file that I think will satisfy my needs:</p>
+<div class="figure">
+<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/manuscript.png" />
+
+</div>
+<p>Much of this may seem self-explanatory, but some stuff not so much. So first, let’s understand what I did for references…</p>
+</div>
+<div id="adding-references" class="section level1">
+<h1>Adding References</h1>
+<p>And now for a part that can be very complicated…adding references. It seems to me that the best way to organize your references is to place them into a <strong>BibTex</strong> document. I’ve pulled a few of my own papers from google scholar and converted them to BibTex format by selecting them and then exporting as BibTex:</p>
+<div class="figure">
+<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/bibtex.png" />
+
+</div>
+<p>I then saved the resulting file as <code>my_refs.bibtex</code>:</p>
+<pre><code>@article{johnson2015correlation,
+  title={Correlation between nasal microbiome composition and remote purulent skin and soft tissue infections},
+  author={Johnson, Ryan C and Ellis, Michael W and Lanier, Jeffrey B and Schlett, Carey D and Cui, Tianyuan and Merrell, D Scott},
+  journal={Infection and immunity},
+  volume={83},
+  number={2},
+  pages={802--811},
+  year={2015},
+  publisher={American Society for Microbiology Journals}
+}
+
+@article{atarashi2017ectopic,
+  title={Ectopic colonization of oral bacteria in the intestine drives TH1 cell induction and inflammation},
+  author={Atarashi, Koji and Suda, Wataru and Luo, Chengwei and Kawaguchi, Takaaki and Motoo, Iori and Narushima, Seiko and Kiguchi, Yuya and Yasuma, Keiko and Watanabe, Eiichiro and Tanoue, Takeshi and others},
+  journal={Science},
+  volume={358},
+  number={6361},
+  pages={359--365},
+  year={2017},
+  publisher={American Association for the Advancement of Science}
+}
+
+@article{johnson2018investigation,
+  title={Investigation of a Cluster of Sphingomonas koreensis Infections},
+  author={Johnson, Ryan C and Deming, Clay and Conlan, Sean and Zellmer, Caroline J and Michelin, Angela V and Lee-Lin, ShihQueen and Thomas, Pamela J and Park, Morgan and Weingarten, Rebecca A and Less, John and others},
+  journal={New England Journal of Medicine},
+  volume={379},
+  number={26},
+  pages={2529--2539},
+  year={2018},
+  publisher={Mass Medical Soc}
+}</code></pre>
+<p>I also had to add a <strong>csi style</strong> to tell R how to format the references. I copied the <strong>American Society for Microbiology</strong> style from <a href="https://github.com/citation-style-language/styles">this website</a>, and saved it as <code>asm.csi</code>. Then in my yaml header (the top portion of the manuscript within the two —), you need to tell R what bibtex library to use, and what style using the <code>bibliography</code> and <code>csi</code> arguments. You can then reference any article using the notation you see in the manuscript –&gt; <span class="citation">[@johnson2015correlation]</span></p>
+</div>
+<div id="referencing-figures-and-tables" class="section level1">
+<h1>Referencing Figures and Tables</h1>
+<p>This is pretty straightforward, feed the path to your png image to the <code>knitr::include_graphics(&quot;path/to/figure.png&quot;)</code>. I opted for this method rather than the <code>![](path/to/figure)</code> as, I was told, it provide more flexibility…but for now, it works and looks pretty good.</p>
+</div>
+<div id="generate-manuscript" class="section level1">
+<h1>Generate Manuscript</h1>
+<p>Now, this is what my directory now looks like:</p>
+<div class="figure">
+<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/dir_tree_2.png" />
+
+</div>
+<p>To publish the manuscript to a word document, click on arrow next to the <code>knitr</code> button and select <code>Knit to Word</code>. This will create a word document of your final manuscript! Mine looks like this:</p>
+<div class="figure">
+<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/word_1.png" />
+
+</div>
+<div class="figure">
+<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/word_2.png" />
+
+</div>
+<div class="figure">
+<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/word_3.png" />
+
+</div>
+</div>
+<div id="automating-with-makefile" class="section level1">
+<h1>Automating with makefile</h1>
+<p>So the last thing I want to talk about is making everything automated…so that basically all I have to do is type <code>make paper</code> and all of the necessary code is re-run to make everything up to date and produce a finished paper.</p>
+<p>If you’re not familiar with makefiles (and I’m very much a novice), Pat Schloss has an entire youtube series on <a href="http://www.riffomonas.org/reproducible_research/">reproducible research and covers makefiles for beginners</a>…and it’s where I got started!</p>
+<p>I created a file called <code>makefile</code> and placed it in my main directory. Here is what mine looks like:</p>
+<div class="figure">
+<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/makefile.png" />
+
+</div>
+<p>Key points with makefile:</p>
+<ul>
+<li><p>Be sure each R command is indented with a TAB</p></li>
+<li><p>Each rule is formated as <code>Target : Dependency</code>. If you have multiple dependencies, break them up line by line and be sure that each one (except for the last one) ends with a <code>\</code>.</p></li>
+</ul>
+<p>Then, once your in your home directory, you can open the terminal and type <code>make manuscript.docx</code>. If all runs smoothly you should see this in your console:</p>
+<div class="figure">
+<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/make_output.png" />
+
+</div>
+<p>Now here is the cool part…if you make any changes to say the code for figure 1, or code for table 1…or ANY dependency for the manuscript, the make command will rerun that code and make sure it’s up to date and then will generate a new manuscript for you!</p>
+<p>Hope this helps…as it really helped me get up and running with writing a manuscript in Rmarkdown. There are still tons of thing you can do to customize your document, but this should get you up and running!</p>
+</div>
