@@ -1,0 +1,474 @@
+---
+title: Caret and Tidymodels
+author: Ryan Johnson
+date: '2019-07-29'
+slug: caret-and-tidymodels
+categories: [R]
+tags: [caret, tidymodels]
+image:
+  caption: ''
+  focal_point: ''
+---
+
+```{r message=FALSE}
+library(caret) # The caret package
+library(tidymodels) # Suite of packages for tidymodeling (eg. parsnip, recipes, yardstick, etc.)
+library(tidyverse) # Suite of packages for tidy data science
+library(skimr) # Package for summary stats on datasets
+library(cowplot) # for making multi-paneled plots
+options(width = 100) # ensure skim results fit on one line
+```
+
+I will be relying heavily on [this website](https://www.machinelearningplus.com/machine-learning/caret-package/). My goal will be to record basic vignettes for common machine learning algorithms using caret...so that I don't have to keep looking it up everytime I re-try something `r emo::ji("stuck_out_tongue_winking_eye")`. With `tidymodels` in active development, I also want to show how to implement the same `caret` code into `tidymodels`.
+
+# Initial Setup and Load Data Set
+
+The goal of this dataset is to predict which of the two brands of orange juices did the customers purchase: Citrus Hill (`CH`) or Minute Maid (`MM`).
+
+The predictor variables are characteristics of the customer and the product itself. It contains 1070 rows with 18 columns. The response variable is `Purchase`.
+
+```{r}
+# Create data directory
+if(!dir.exists("data/raw")){
+  dir.create("data/raw", recursive = TRUE)
+}
+
+# Download data set (if doesn't already exist)
+if(!file.exists("data/raw/orange_juice_withmissing.csv")){
+  data_url <- "https://raw.githubusercontent.com/selva86/datasets/master/orange_juice_withmissing.csv"
+  dest_file <- "data/raw/orange_juice_withmissing.csv"
+  download.file(url = data_url, destfile = dest_file)
+}
+
+# Read in the data set
+orange <- suppressMessages(suppressWarnings(read_csv("data/raw/orange_juice_withmissing.csv")))
+
+# Summarize orange data
+skim(orange)
+```
+
+### Convert to Factors
+
+Some columns are shown as integers, but they need to be factors (eg. `Purchase`, `Store7`)
+
+```{r}
+orange <- orange %>%
+  mutate(Purchase = as.factor(Purchase)) %>%
+  mutate(Store7 = as.factor(Store7)) %>%
+  mutate(StoreID = as.factor(StoreID))
+```
+
+
+
+
+# Splitting the Data (Train and Test)
+
+### `caret::createDataPartition()`
+
+This will split the data on a based on a defined percentage that will be allocated to the training data:
+
+```{r}
+set.seed(1234)
+
+# Step 1: Get row numbers for the training data
+trainRowNumbers <- createDataPartition(orange$Purchase, p = 0.75, list = FALSE)
+
+# Step 2: Create the training  dataset
+trainData <- orange[trainRowNumbers,] # 75% of the data
+
+# Step 3: Create the test dataset
+testData <- orange[-trainRowNumbers,]
+
+# Store X and Y for later use.
+x <- trainData[, 2:18]
+y <- trainData$Purchase
+```
+
+### `rsample::initial_split()`
+
+Same thing as above but using the `rsample` package from tidymodels:
+
+```{r}
+set.seed(1234)
+
+# Split data into training and test data
+orange_split <- initial_split(orange, prop = 0.75)
+train_data <- training(orange_split)
+test_data <- testing(orange_split)
+```
+
+Note that despite setting the same seed, the training data sets are different. I'll work with the `createDataPartition()` train/test data sets moving forward.
+
+```{r}
+rm(orange_split, train_data, test_data)
+skim(trainData)
+```
+
+# Impute Missing Values
+
+This data contains a fair amount of missing data points. There are a few way to impute missing values:
+
+  * If categorical data, fill in the category that appears most often (i.e. the *mode*).
+  * If numerical/continuous, fill in with the mean of the column.
+  * Predict the missing values using a predictive algorithm.
+  
+We will focus on the last point and use `k Nearest Neighbors` algorithm to fill in the blanks.
+
+Before we continue, we should note the one missing `StoreID` row. We should expand it as a series of dummy one-hot columns:
+
+```{r}
+dmy <- dummyVars(Purchase ~ ., data = trainData)
+trainData_dmy <- data.frame(predict(dmy, newdata = trainData))
+skim(trainData_dmy)
+```
+
+
+### `caret::preProcess()`
+
+This command creates a **model** that can be used to impute missing values. Let's create a `preProcess` model that uses `knn`. Note that `preProcess` only works on numeric data, so by default our three factored columns (`Purchased`, `StoreID`, `Store7`) will be ignored.
+
+```{r}
+# Create the knn imputation model on the training data
+impute_missing_model <- preProcess(trainData_dmy, method='knnImpute')
+impute_missing_model
+```
+The above output shows the various preprocessing steps done in the process of knn imputation.
+
+That is, it has centered (subtract by mean) 22 variables, ignored 0, used k=5 (considered 5 nearest neighbors) to predict the missing values and finally scaled (divide by standard deviation) 22 variables.
+
+Let’s now use this model to predict the missing values in trainData:
+
+```{r}
+# Use the imputation model to predict the values of missing data points
+library(RANN)  # required for knnInpute
+trainData_impute <- predict(impute_missing_model, newdata = trainData_dmy)
+
+# check if any NA values exist 
+if (!anyNA(trainData_impute)){
+  message("All missing values have been filled in...good job!")
+} else if (anyNA(trainData_impute)){
+  message("Missing data still exists...try again!")
+}
+```
+
+### `recipes::recipe(), prep(), bake()`
+
+In caret, you determine what imputing algorithm you're going to use, then you run it. Within the `tidymodels` universe, you instead create a `recipe()`. Think of it exactly as the name implies, you are designing a recipe to cook something...but not cooking it just yet. There are things you can still tweak in your `recipe()` before actually popping it in the oven to `bake()`. Let' go ahead and add in a pre-processing step to impute our missing data with `knn` within our recipe. The recipe must start with a formula. For this example, we are going to predict `Purchase` using all predictors:
+
+```{r}
+# Add forumla to recipe
+orange_recipe <- recipe(Purchase ~ ., data = trainData)
+summary(orange_recipe)
+```
+
+The order in which you infer, center, scale, etc does matter (see [this post](http://www.rebeccabarter.com/blog/2019-06-06_pre_processing/])).
+
+  1. Impute
+
+  1. Individual transformations for skewness and other issues
+
+  1. Discretize (if needed and if you have no other choice)
+
+  1. Create dummy variables
+
+  1. Create interactions
+
+  1. Normalization steps (center, scale, range, etc)
+
+  1. Multivariate transformation (e.g. PCA, spatial sign, etc)
+
+```{r}
+# Add imputing steps to recipe
+orange_recipe_steps <- orange_recipe %>%
+  # Add dummy variables for "class" variables
+  step_dummy(Store7, StoreID, one_hot = TRUE) %>%
+  # knn impute all variables
+  step_knnimpute(all_predictors()) %>%
+  # Center and Scale
+  step_center(all_predictors()) %>% 
+  step_scale(all_predictors())
+
+orange_recipe_steps
+```
+
+Now that the recipe is finished, you can see from the output exactly what is going into the recipe. **It's important to note that at this point, nothing has been imputed or transformed.** 
+
+Next, we need to see how this recipe will work on our data set. `prep()` will perform the various recipe steps on our training data and calculate the necessary statistics (eg. means and standar deviations):
+
+```{r}
+prepped_recipe <- prep(orange_recipe_steps, training = trainData)
+prepped_recipe
+```
+You can see here from the output that for each imputation/tranformation what columns are impacted. We can now 
+
+We can now apply our prepped recipe to the training data:
+
+```{r}
+trainData_baked <- bake(prepped_recipe, new_data = trainData) # convert to the train data to the newly imputed data
+testData_baked <- bake(prepped_recipe, new_data = testData) # do the same for the test data
+skim(trainData_baked)
+```
+
+The data is now in a form where all missing values have been imputed, all factor/nominal columns have been one-hot encoded, and is now ready for analysis!
+
+
+
+# Feature Analysis
+
+Before you even make prediction, sometimes (if you data doesn't have 1000000... columns), you can just look to see how the features differ between the categories you are trying to predict.
+
+### `caret::featurePlot()`
+
+Let' make some various plots to see how the preditor data is distibuted between `CH` and `MM`:
+
+```{r}
+featurePlot(x = trainData_baked[, 2:23], 
+            y = trainData_baked$Purchase, 
+            plot = "box",
+            strip=strip.custom(par.strip.text=list(cex=.7)),
+            scales = list(x = list(relation="free"),
+                          y = list(relation="free")))
+
+featurePlot(x = trainData_baked[, 2:23], 
+            y = trainData_baked$Purchase, 
+            plot = "density",
+            strip=strip.custom(par.strip.text=list(cex=.7)),
+            scales = list(x = list(relation="free"), 
+                          y = list(relation="free")))
+```
+
+### Tidymodels feature plots (using Tidyverse)
+
+I don't believe there are any quick functions built into the tidymodels packages to make quick feature plots, but this is pricicely what makes it good...it's not too specific and plays well with other packages within the tidyverse. Here I'll use `ggplot`, `purrr`, and `cowplot` to make similar boxplots and density plots.
+
+```{r fig.height=15, fig.width=15}
+box_fun_plot = function(data, x, y) {
+  ggplot(data = data, aes(x = .data[[x]],
+                          y = .data[[y]],
+                          fill = .data[[x]])) +
+    geom_boxplot() +
+    labs(title = y,
+         x = x,
+         y = y) +
+    theme(
+      legend.position = "none"
+    )
+}
+
+# Create vector of predictors
+expl <- names(trainData_baked)[-1]
+
+# Loop vector with map
+expl_plots_box <- map(expl, ~box_fun_plot(data = trainData_baked, x = "Purchase", y = .x) )
+plot_grid(plotlist = expl_plots_box)
+```
+
+```{r fig.height=15, fig.width=15}
+density_fun_plot = function(data, x, y) {
+  ggplot(data = data, aes(x = .data[[y]],
+                          fill = .data[[x]])) +
+    geom_density(alpha = 0.7) +
+    labs(title = y,
+         x = y) +
+    theme(
+      legend.position = "none"
+    )
+}
+
+# Loop vector with map
+expl_plots_density <- map(expl, ~density_fun_plot(data = trainData_baked, x = "Purchase", y = .x) )
+plot_grid(plotlist = expl_plots_density)
+```
+
+
+# Training Models
+
+There are tons of machine learning algorithms out there, but to keep things simple, we are going to fit a `randomForest` model to the data. Let's first discuss how to do this in `caret`
+
+### `caret::trainControl(), train()`
+
+`trainControl()` allows us to specify how we want to train the model. Do we want to do cross validation? Reapeated cross validation? Bootstrapping? How many repetitions? All of these things get specified in `trainControl()`. With randomForest (from the ranger package), there is one parameter that needs tuning: **mtry** (number of variables randomly sampled as candidates at each split).
+
+```{r}
+# Let's do 5 fold cross validation. This randomly splits the data into 5 parts, trains the model on 4 parts
+#  and validates on the remaining 1 part. It is recommended to use repeatedcv so you can repeat this process
+#  but for sake of computational time, will stick with cv.
+train_control <- trainControl(method = "cv", number = 5)
+
+# Run random forest using the ranger package
+set.seed(1234)
+rf_fit <- train(Purchase ~ .,  # Predict purchase using all predictors
+               data = trainData_baked,
+               method = "ranger",
+               trControl = train_control)
+rf_fit
+```
+
+By default, the tuning parameter mtry goes through 3 iterations (2, 12, and 22...based on size of dataset). You can define your own tuning grid as well. Let's make one and expand the parameters using mtry, splitrule, and min.node.size which determines the minimum size of each terminal node in tree. A value of one make lead to overfitting/really large trees.
+
+You can also give the `train()` command a preProcess argument where you can define various tools to pre-process the training data. Since we already did that previously, we don't need to hear, but it's an option you should be aware of.
+
+```{r}
+rf_grid <- expand.grid(mtry = c(2, 5, 10, 20),
+                      splitrule = c("gini", "extratrees"),
+                      min.node.size = c(1, 3, 5))
+
+# Train new model using grid
+set.seed(1234)
+rf_fit_grid <- train(Purchase ~ .,
+                     data = trainData_baked,
+                     method = "ranger",
+                     trControl = train_control,
+                     tuneGrid = rf_grid)
+rf_fit_grid
+```
+
+You can see that the best model was an mtry of 10, splitrule of extratrees and a minimun node size of 5.
+
+### `parsnip`
+
+In tidymodels, training models is done using the `parsnip` package. Let's start small and simply establish that we want to train a random forest model. We won't specify any parameters or packages that run randomforest. Just simply "I want random forest":
+
+```{r}
+# Set model to random forest
+rf_mod <- rand_forest()
+
+rf_mod
+```
+
+Similar to the `recipe()` command above, we can now start adding various parameters to our model. To see what parameters exist, you can run the `arg()` command:
+
+```{r}
+args(rand_forest)
+```
+
+Just like above, you may want to tune the various parameters. You can use `varying()` as a place holder for parameters you want to tune later. We also want to tell the model we are trying to predict MM vs CH, which is a classification problem. We are also going to use `ranger` (just like above) and set the seed internally.
+
+```{r}
+rf_mod <-   
+  rand_forest(mtry = varying(), mode = "classification") %>%
+  set_engine("ranger", seed = 1234)
+
+rf_mod
+```
+
+Let's try running the model with an mtry of 5.
+
+```{r}
+rf_mod %>% 
+  set_args(mtry = 5) %>% 
+  fit(Purchase ~ ., data = trainData_baked)
+```
+
+Now, what if we wanted to do cross-validation? We need to go back to `rsample` package for this. This may seem like a little more work than what was presented in the `caret` part, but in a way it gives you a little more control over your data and ensures you know exactly what your doing each step of the way.
+
+```{r}
+set.seed(1234)
+
+# Create a 5 fold cross validation dat set
+cv_splits <- vfold_cv(
+  data = trainData_baked,
+  v = 5,
+  strata = "Purchase"
+)
+
+cv_splits
+```
+The splits row contains how the data will be split within each fold (4/5 of the data will be in one group, 1/5 in the other). Let's look a the first fold just to see how the data will be split:
+
+```{r}
+cv_splits$splits[[1]]
+
+# This will extract the 4/5ths analysis data part
+cv_splits$splits[[1]] %>% analysis() %>% dim()
+
+# This will extract the 1/5th assessment data part
+cv_splits$splits[[1]] %>% assessment() %>% dim()
+```
+
+Now I need to create a function that contains my model that can be iterated over each split of the data. I also want a function that will make predictions using said model.
+
+```{r}
+fit_mod_func <- function(split, spec){
+  fit(object = spec,
+      formula = Purchase ~ .,
+      data = analysis(split))
+}
+
+predict_func <- function(split, model){
+  # Extract the assessment data
+  assess <- assessment(split)
+  
+  # Make prediction
+  pred <- predict(model, new_data = assess)
+  as_tibble(cbind(assess, pred[[1]]))
+}
+```
+
+Then, using the `purrr::map()` function, iterate the function over each fold of the data. This will create a random forest model for each fold of the data. Store the results in a new column in `cv_splits`.
+
+```{r}
+spec_rf <- rand_forest() %>% 
+  set_engine("ranger")
+
+cv_splits <- cv_splits %>% 
+  mutate(models_rf = map(.x = splits, .f = fit_mod_func, spec = spec_rf))
+
+cv_splits
+```
+
+We can then inspect each model if you wanted:
+
+```{r}
+cv_splits$models_rf[[1]]
+```
+
+Next, add a column that contains the predictions:
+
+```{r}
+cv_splits <- cv_splits %>% 
+  mutate(pred_rf = map2(.x = splits, .y = models_rf, .f = predict_func))
+
+cv_splits
+```
+
+
+To calculate performance metrics, we'll create another function:
+
+```{r}
+# Will calculate accuracy of classification
+perf_metrics <- metric_set(accuracy)
+
+# Create a function that will take the prediction and compare to truth
+rf_metrics <- function(pred_df){
+  perf_metrics(
+    pred_df,
+    truth = Purchase,
+    estimate = res # res is the column name for the predictions
+  )
+}
+
+cv_splits <- cv_splits %>% 
+  mutate(perf_rf = map(pred_rf, rf_metrics))
+```
+
+Let's take a look at the first fold's accuracy:
+
+```{r}
+cv_splits$perf_rf[[1]]
+```
+
+We can also average the accuracy column to get the mean accuracy for all folds in the cross-valication:
+
+```{r}
+cv_splits %>% 
+  unnest(perf_rf) %>% 
+  group_by(.metric) %>% 
+  summarise(
+    .avg = mean(.estimate), 
+    .sd = sd(.estimate)
+  )
+```
+
+And there it is, we predicted if `CM` or `MM` with roughly 80% accuracy using random forest, but implementing it in two different environments: `caret` and `tidymodels`.
+
