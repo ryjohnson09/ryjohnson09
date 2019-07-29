@@ -27,10 +27,7 @@ image:
 <p>Then I want to have a few subdirectories here. Once I will call <code>/data</code> and within it I will have <code>/data/processed</code> and <code>/data/raw</code>. The <strong>raw</strong> directory will contain the primary data files and once they have been cleaned/fixed up and are ready to be analyzed, I will place them into the <strong>processed</strong> directory. Each processing step should have a script associated with it. So let’s also creat a <code>code/</code> directory.</p>
 <p>Now while I do like that ability to place code directly into the manuscript, I actually prefer to have separate scripts that do this, and place the resulting figures in a spearate directory. So let’s create a <code>/results</code> directory, and within it we can have <code>/results/figures</code> and <code>/results/tables</code>.</p>
 <p>Here is what my directory now looks like:</p>
-<div class="figure">
-<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/dir_tree_1.png" />
-
-</div>
+<p><img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/dir_tree_1.png" /></p>
 </div>
 <div id="the-data" class="section level1">
 <h1>The Data</h1>
@@ -105,19 +102,13 @@ ggsave(plot = iris_plot, filename = &quot;results/figures/fig1.png&quot;)</code>
 <div id="the-manuscript" class="section level1">
 <h1>The Manuscript</h1>
 <p>After doing a bit of research, here is a bare-bones manuscript Rmarkdown file that I think will satisfy my needs:</p>
-<div class="figure">
-<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/manuscript.png" />
-
-</div>
+<p><img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/manuscript.png" /></p>
 <p>Much of this may seem self-explanatory, but some stuff not so much. So first, let’s understand what I did for references…</p>
 </div>
 <div id="adding-references" class="section level1">
 <h1>Adding References</h1>
 <p>And now for a part that can be very complicated…adding references. It seems to me that the best way to organize your references is to place them into a <strong>BibTex</strong> document. I’ve pulled a few of my own papers from google scholar and converted them to BibTex format by selecting them and then exporting as BibTex:</p>
-<div class="figure">
-<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/bibtex.png" />
-
-</div>
+<p><img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/bibtex.png" /></p>
 <p>I then saved the resulting file as <code>my_refs.bibtex</code>:</p>
 <pre><code>@article{johnson2015correlation,
   title={Correlation between nasal microbiome composition and remote purulent skin and soft tissue infections},
@@ -160,43 +151,25 @@ ggsave(plot = iris_plot, filename = &quot;results/figures/fig1.png&quot;)</code>
 <div id="generate-manuscript" class="section level1">
 <h1>Generate Manuscript</h1>
 <p>Now, this is what my directory now looks like:</p>
-<div class="figure">
-<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/dir_tree_2.png" />
-
-</div>
+<p><img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/dir_tree_2.png" /></p>
 <p>To publish the manuscript to a word document, click on arrow next to the <code>knitr</code> button and select <code>Knit to Word</code>. This will create a word document of your final manuscript! Mine looks like this:</p>
-<div class="figure">
-<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/word_1.png" />
-
-</div>
-<div class="figure">
-<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/word_2.png" />
-
-</div>
-<div class="figure">
-<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/word_3.png" />
-
-</div>
+<p><img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/word_1.png" /></p>
+<p><img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/word_2.png" /></p>
+<p><img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/word_3.png" /></p>
 </div>
 <div id="automating-with-makefile" class="section level1">
 <h1>Automating with makefile</h1>
 <p>So the last thing I want to talk about is making everything automated…so that basically all I have to do is type <code>make paper</code> and all of the necessary code is re-run to make everything up to date and produce a finished paper.</p>
 <p>If you’re not familiar with makefiles (and I’m very much a novice), Pat Schloss has an entire youtube series on <a href="http://www.riffomonas.org/reproducible_research/">reproducible research and covers makefiles for beginners</a>…and it’s where I got started!</p>
 <p>I created a file called <code>makefile</code> and placed it in my main directory. Here is what mine looks like:</p>
-<div class="figure">
-<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/makefile.png" />
-
-</div>
+<p><img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/makefile.png" /></p>
 <p>Key points with makefile:</p>
 <ul>
 <li><p>Be sure each R command is indented with a TAB</p></li>
 <li><p>Each rule is formated as <code>Target : Dependency</code>. If you have multiple dependencies, break them up line by line and be sure that each one (except for the last one) ends with a <code>\</code>.</p></li>
 </ul>
 <p>Then, once your in your home directory, you can open the terminal and type <code>make manuscript.docx</code>. If all runs smoothly you should see this in your console:</p>
-<div class="figure">
-<img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/make_output.png" />
-
-</div>
+<p><img src="/post/2019-02-13-writing-a-scientific-paper-in-rmarkdown_files/make_output.png" /></p>
 <p>Now here is the cool part…if you make any changes to say the code for figure 1, or code for table 1…or ANY dependency for the manuscript, the make command will rerun that code and make sure it’s up to date and then will generate a new manuscript for you!</p>
 <p>Hope this helps…as it really helped me get up and running with writing a manuscript in Rmarkdown. There are still tons of thing you can do to customize your document, but this should get you up and running!</p>
 </div>
