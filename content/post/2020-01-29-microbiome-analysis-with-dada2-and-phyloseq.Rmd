@@ -3,6 +3,9 @@ title: Microbiome Analysis with DADA2 and Phyloseq
 author: Ryan Johnson
 date: '2020-01-29'
 slug: microbiome-analysis-with-dada2-and-phyloseq
+output:
+  blogdown::html_page:
+    toc: TRUE
 categories:
   - R
   - dada2
@@ -14,4 +17,55 @@ image:
   focal_point: ''
 ---
 
-Coming soon...
+# Introduction
+
+The purpose of this post will be to guide researchers through a basic analysis of microbiome data using R packages `DADA2` and `Phyloseq`. Most concepts will be discussed at a very high level and I won't spend too much time digging into the weeds of the analysis. 
+
+We will be analyzing a very small subset of data that was used in part to look at differences in microbiome structure between mice given a regular diet (**RD**, n = 24) versus a diet with no isoflavones (**NIF**, n = 24). Fecal samples from each mouse were collected 2 weeks after being fed either the RD or NIF diets. Samples were processed in the lab and subjected to Illumina MiSeq 300 base paired-end sequencing. We specifically targeted the V4 variable region of the 16S rRNA gene for sequencing. Reads from each sample were subsampled to 5000 reads/sample just to make the data a bit more manageable.
+
+# Set Up Your Environment
+
+Before we can get started, there are a few things you'll need to download/install:
+
+### The Microbiome Data
+
+The data has been compressed into a single `tar.gz` file. You'll need to download it and de-compress it. This can usually be done by simply double-clicking on it.
+
+Download the data [here](https://drive.google.com/file/d/1HCcMQASYweEYrjTQUxuHeaQ07FlJf-3U/view?usp=sharing)
+
+### Download and Install necessary R packages
+
+In order to get `DADA2`, `Phyloseq`, and a few other packages installed on your computer, you need to install them from the internet. Some of these packages can take a while to install, so don't be alarmed if it take a couple minutes. `DADA2` and `Phyloseq` are held within Bioconductor, which a collection of packages used primarily for biological data analysis, so you'll need to install Bioconductor prior to installing `DADA2` and `Phyloseq`. Once all packags are installed, you won't have access to them until you "turn them on" using the `library()` command.
+
+* <span style="color: red;">**DADA2**</span>: Please follow the directions from this [website](https://benjjneb.github.io/dada2/dada-installation.html). This is the package that does much of the "heavy" lifting in terms of read quality processing and error rate detection.
+
+* <span style="color: red;">**Phyloseq**</span>: Please follow the directions from this [website](https://bioconductor.org/packages/release/bioc/html/phyloseq.html). This package is primarily used to process the high-quality reads, generate diversity statistics, and make pretty figures.
+
+* <span style="color: red;">**Tidyverse**</span>: This is a suite of packages that are used for variety of data science needs (read/write files, clean/edit data, make cool figures, etc). To install, simply enter `install.packages("tidyverse")` into your R prompt.
+
+These two blocks of code should install and load all of the packages needed:
+
+```{r install_packages, eval=FALSE, message=FALSE, warning=FALSE}
+# DADA2 install
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("dada2", version = "3.10")
+
+# Phyloseq install
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("phyloseq")
+
+# Tidyverse install
+install.packages("tidyverse")
+```
+
+
+```{r load_libraries, warning=FALSE, message=FALSE}
+# Load packages
+library(dada2)
+library(phyloseq)
+library(tidyverse)
+```
+
+

@@ -3,6 +3,9 @@ title: Microbiome Analysis with DADA2 and Phyloseq
 author: Ryan Johnson
 date: '2020-01-29'
 slug: microbiome-analysis-with-dada2-and-phyloseq
+output:
+  blogdown::html_page:
+    toc: TRUE
 categories:
   - R
   - dada2
@@ -15,8 +18,53 @@ image:
 ---
 
 
+<div id="TOC">
+<ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#set-up-your-environment">Set Up Your Environment</a><ul>
+<li><a href="#the-microbiome-data">The Microbiome Data</a></li>
+<li><a href="#download-and-install-necessary-r-packages">Download and Install necessary R packages</a></li>
+</ul></li>
+</ul>
+</div>
 
 <div id="introduction" class="section level1">
 <h1>Introduction</h1>
-<p>Hello, this is a test.</p>
+<p>The purpose of this post will be to guide researchers through a basic analysis of microbiome data using R packages <code>DADA2</code> and <code>Phyloseq</code>. Most concepts will be discussed at a very high level and I won’t spend too much time digging into the weeds of the analysis.</p>
+<p>We will be analyzing a very small subset of data that was used in part to look at differences in microbiome structure between mice given a regular diet (<strong>RD</strong>, n = 24) versus a diet with no isoflavones (<strong>NIF</strong>, n = 24). Fecal samples from each mouse were collected 2 weeks after being fed either the RD or NIF diets. Samples were processed in the lab and subjected to Illumina MiSeq 300 base paired-end sequencing. We specifically targeted the V4 variable region of the 16S rRNA gene for sequencing. Reads from each sample were subsampled to 5000 reads/sample just to make the data a bit more manageable.</p>
+</div>
+<div id="set-up-your-environment" class="section level1">
+<h1>Set Up Your Environment</h1>
+<p>Before we can get started, there are a few things you’ll need to download/install:</p>
+<div id="the-microbiome-data" class="section level3">
+<h3>The Microbiome Data</h3>
+<p>The data has been compressed into a single <code>tar.gz</code> file. You’ll need to download it and de-compress it. This can usually be done by simply double-clicking on it.</p>
+<p>Download the data <a href="https://drive.google.com/file/d/1HCcMQASYweEYrjTQUxuHeaQ07FlJf-3U/view?usp=sharing">here</a></p>
+</div>
+<div id="download-and-install-necessary-r-packages" class="section level3">
+<h3>Download and Install necessary R packages</h3>
+<p>In order to get <code>DADA2</code>, <code>Phyloseq</code>, and a few other packages installed on your computer, you need to install them from the internet. Some of these packages can take a while to install, so don’t be alarmed if it take a couple minutes. <code>DADA2</code> and <code>Phyloseq</code> are held within Bioconductor, which a collection of packages used primarily for biological data analysis, so you’ll need to install Bioconductor prior to installing <code>DADA2</code> and <code>Phyloseq</code>. Once all packags are installed, you won’t have access to them until you “turn them on” using the <code>library()</code> command.</p>
+<ul>
+<li><p><span style="color: red;"><strong>DADA2</strong></span>: Please follow the directions from this <a href="https://benjjneb.github.io/dada2/dada-installation.html">website</a>. This is the package that does much of the “heavy” lifting in terms of read quality processing and error rate detection.</p></li>
+<li><p><span style="color: red;"><strong>Phyloseq</strong></span>: Please follow the directions from this <a href="https://bioconductor.org/packages/release/bioc/html/phyloseq.html">website</a>. This package is primarily used to process the high-quality reads, generate diversity statistics, and make pretty figures.</p></li>
+<li><p><span style="color: red;"><strong>Tidyverse</strong></span>: This is a suite of packages that are used for variety of data science needs (read/write files, clean/edit data, make cool figures, etc). To install, simply enter <code>install.packages(&quot;tidyverse&quot;)</code> into your R prompt.</p></li>
+</ul>
+<p>These two blocks of code should install and load all of the packages needed:</p>
+<pre class="r"><code># DADA2 install
+if (!requireNamespace(&quot;BiocManager&quot;, quietly = TRUE))
+    install.packages(&quot;BiocManager&quot;)
+BiocManager::install(&quot;dada2&quot;, version = &quot;3.10&quot;)
+
+# Phyloseq install
+if (!requireNamespace(&quot;BiocManager&quot;, quietly = TRUE))
+    install.packages(&quot;BiocManager&quot;)
+BiocManager::install(&quot;phyloseq&quot;)
+
+# Tidyverse install
+install.packages(&quot;tidyverse&quot;)</code></pre>
+<pre class="r"><code># Load packages
+library(dada2)
+library(phyloseq)
+library(tidyverse)</code></pre>
+</div>
 </div>
