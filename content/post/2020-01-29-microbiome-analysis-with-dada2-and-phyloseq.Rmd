@@ -69,3 +69,32 @@ library(tidyverse)
 ```
 
 
+
+# Set up Working Environment
+
+### Reads
+
+To make things easier, we need to create some variables that will hold the names of our fastq files and the directory for our soon-to-be processed reads. The following code block will store the path for the forward (R1) and reverse (R2) fastq files:
+
+```{r}
+# Get path of directory that contains all of the reads
+reads_path <- "data/mouse_samples"
+
+# Store path of forward and reverse reads
+Fs_path <- sort(list.files(reads_path, pattern="R1.fastq", full.names = TRUE))
+Rs_path <- sort(list.files(reads_path, pattern="R2.fastq", full.names = TRUE))
+
+# Create directories for processed forward and reverse reads
+Fs_path_filtered <- file.path(reads_path, "filtered_Fs")
+Rs_path_filtered <- file.path(reads_path, "filtered_Rs")
+```
+
+
+It will also be useful later on to store the sample names without the R1/R2 and fastq annotation:
+
+```{r}
+mouse_sample_names <- str_replace(string = basename(Fs_path), 
+                                  pattern = "_R1\\.fastq",
+                                  replacement = "")
+```
+

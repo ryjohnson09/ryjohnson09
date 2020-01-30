@@ -25,6 +25,9 @@ image:
 <li><a href="#the-microbiome-data">The Microbiome Data</a></li>
 <li><a href="#download-and-install-necessary-r-packages">Download and Install necessary R packages</a></li>
 </ul></li>
+<li><a href="#set-up-working-environment">Set up Working Environment</a><ul>
+<li><a href="#reads">Reads</a></li>
+</ul></li>
 </ul>
 </div>
 
@@ -66,5 +69,26 @@ install.packages(&quot;tidyverse&quot;)</code></pre>
 library(dada2)
 library(phyloseq)
 library(tidyverse)</code></pre>
+</div>
+</div>
+<div id="set-up-working-environment" class="section level1">
+<h1>Set up Working Environment</h1>
+<div id="reads" class="section level3">
+<h3>Reads</h3>
+<p>To make things easier, we need to create some variables that will hold the names of our fastq files and the directory for our soon-to-be processed reads. The following code block will store the path for the forward (R1) and reverse (R2) fastq files:</p>
+<pre class="r"><code># Get path of directory that contains all of the reads
+reads_path &lt;- &quot;data/mouse_samples&quot;
+
+# Store path of forward and reverse reads
+Fs_path &lt;- sort(list.files(reads_path, pattern=&quot;R1.fastq&quot;, full.names = TRUE))
+Rs_path &lt;- sort(list.files(reads_path, pattern=&quot;R2.fastq&quot;, full.names = TRUE))
+
+# Create directories for processed forward and reverse reads
+Fs_path_filtered &lt;- file.path(reads_path, &quot;filtered_Fs&quot;)
+Rs_path_filtered &lt;- file.path(reads_path, &quot;filtered_Rs&quot;)</code></pre>
+<p>It will also be useful later on to store the sample names without the R1/R2 and fastq annotation:</p>
+<pre class="r"><code>mouse_sample_names &lt;- str_replace(string = basename(Fs_path), 
+                                  pattern = &quot;_R1\\.fastq&quot;,
+                                  replacement = &quot;&quot;)</code></pre>
 </div>
 </div>
