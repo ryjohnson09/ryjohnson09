@@ -12,4 +12,5 @@ content/post/.DS_Store
 static/.DS_Store
 static/*/.DS_Store
 content/post/data/*
+static/post/*
 .DS_Store

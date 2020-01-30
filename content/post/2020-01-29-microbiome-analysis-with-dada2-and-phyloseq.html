@@ -28,6 +28,10 @@ image:
 <li><a href="#set-up-working-environment">Set up Working Environment</a><ul>
 <li><a href="#reads">Reads</a></li>
 </ul></li>
+<li><a href="#the-analysis">The Analysis</a><ul>
+<li><a href="#check-read-quality">Check Read Quality</a></li>
+</ul></li>
+<li><a href="#read-filtering">Read Filtering</a></li>
 </ul>
 </div>
 
@@ -75,9 +79,10 @@ library(tidyverse)</code></pre>
 <h1>Set up Working Environment</h1>
 <div id="reads" class="section level3">
 <h3>Reads</h3>
-<p>To make things easier, we need to create some variables that will hold the names of our fastq files and the directory for our soon-to-be processed reads. The following code block will store the path for the forward (R1) and reverse (R2) fastq files:</p>
+<p>To make things easier, we need to create some variables that will hold the names of our fastq files and the directory for our soon-to-be processed reads. The following code block will store the paths for the forward (R1) and reverse (R2) fastq files (raw and processed):</p>
 <pre class="r"><code># Get path of directory that contains all of the reads
-reads_path &lt;- &quot;data/mouse_samples&quot;
+#  change if reads in separate file on your computer
+reads_path &lt;- &quot;data/mouse_samples&quot; 
 
 # Store path of forward and reverse reads
 Fs_path &lt;- sort(list.files(reads_path, pattern=&quot;R1.fastq&quot;, full.names = TRUE))
@@ -91,4 +96,94 @@ Rs_path_filtered &lt;- file.path(reads_path, &quot;filtered_Rs&quot;)</code></pr
                                   pattern = &quot;_R1\\.fastq&quot;,
                                   replacement = &quot;&quot;)</code></pre>
 </div>
+</div>
+<div id="the-analysis" class="section level1">
+<h1>The Analysis</h1>
+<div id="check-read-quality" class="section level3">
+<h3>Check Read Quality</h3>
+<p>We first want to get a general idea of the quality of the reads in our dataset. Let’s look at a random subsampling of the samples:</p>
+<pre class="r"><code>set.seed(1234) # Ensures the same &quot;random&quot; sampling is performed
+
+# Forward Read quality
+plotQualityProfile(Fs_path[sample(1:48, 12, replace = FALSE)])</code></pre>
+<p><img src="/post/2020-01-29-microbiome-analysis-with-dada2-and-phyloseq_files/figure-html/unnamed-chunk-3-1.png" width="672" /></p>
+<pre class="r"><code># Reverse Read quality
+plotQualityProfile(Rs_path[sample(1:48, 12, replace = FALSE)])</code></pre>
+<p><img src="/post/2020-01-29-microbiome-analysis-with-dada2-and-phyloseq_files/figure-html/unnamed-chunk-3-2.png" width="672" /></p>
+<p>We typically don’t want to have the read quality drop below ~30 (focus on the green lines which represent mean quality). But we also need to make sure that our reads have sufficient overlap. The V4 region of the 16S rRNA gene is about 250bp in length, so if we decide to trim off the ends of the sequences due to low quality, the remaining lengths must be &gt;250…actually it needs to be more than that in order to have sufficient overlap. I believe that DADA2 requires at least 12bp overlap, but the more the better.</p>
+<p>For the forward reads, we see the quality drop at around <strong>200bp</strong>. For the reverse reads, which are lower in quality (not atypical), we see the quality drop at around <strong>150bp</strong>. We will use 200 and 150 to trim our seqeunces.</p>
+</div>
+</div>
+<div id="read-filtering" class="section level1">
+<h1>Read Filtering</h1>
+<p>Using the following parameters:</p>
+<ul>
+<li><p><code>maxN=0</code> (DADA2 requires no Ns)</p></li>
+<li><p><code>truncQ=2</code>Truncate reads at the first instance of a quality score less than or equal to truncQ (keeping this as default)</p></li>
+<li><p><code>rm.phix=TRUE</code>: discard reads that match against the phiX genome</p></li>
+<li><p><code>maxEE=c(2,2)</code>: sets the maximum number of “expected errors” allowed in a read, which is a better filter than simply averaging quality scores.</p></li>
+</ul>
+<pre class="r"><code>out &lt;- filterAndTrim(fwd=Fs_path, 
+              filt=Fs_path_filtered,
+              rev=Rs_path, 
+              filt.rev=Rs_path_filtered,
+              truncLen=c(200,150), # forward and reverse read 
+              maxEE=c(2,2), 
+              truncQ=2, 
+              maxN=0, 
+              rm.phix=TRUE,
+              compress=TRUE, 
+              verbose=TRUE, 
+              multithread=TRUE)
+out</code></pre>
+<pre><code>##                reads.in reads.out
+## NIF1_R1.fastq      5000      4013
+## NIF10_R1.fastq     5000      4137
+## NIF11_R1.fastq     5000      4320
+## NIF12_R1.fastq     5000      4075
+## NIF13_R1.fastq     5000      4111
+## NIF14_R1.fastq     5000      4370
+## NIF15_R1.fastq     5000      4075
+## NIF16_R1.fastq     5000      4317
+## NIF17_R1.fastq     5000      4169
+## NIF18_R1.fastq     5000      4108
+## NIF19_R1.fastq     5000      4091
+## NIF2_R1.fastq      5000      4121
+## NIF20_R1.fastq     5000      4121
+## NIF21_R1.fastq     5000      4061
+## NIF22_R1.fastq     5000      4542
+## NIF23_R1.fastq     5000      4203
+## NIF24_R1.fastq     5000      4219
+## NIF3_R1.fastq      5000      4358
+## NIF4_R1.fastq      5000      4247
+## NIF5_R1.fastq      5000      4260
+## NIF6_R1.fastq      5000      4314
+## NIF7_R1.fastq      5000      4066
+## NIF8_R1.fastq      5000      4056
+## NIF9_R1.fastq      5000      4071
+## RD1_R1.fastq       5000      4173
+## RD10_R1.fastq      5000      4264
+## RD11_R1.fastq      5000      4276
+## RD12_R1.fastq      5000      4208
+## RD13_R1.fastq      5000      4272
+## RD14_R1.fastq      5000      4189
+## RD15_R1.fastq      5000      4390
+## RD16_R1.fastq      5000      4182
+## RD17_R1.fastq      5000      4529
+## RD18_R1.fastq      5000      4135
+## RD19_R1.fastq      5000      4090
+## RD2_R1.fastq       5000      4103
+## RD20_R1.fastq      5000      4253
+## RD21_R1.fastq      5000      4214
+## RD22_R1.fastq      5000      4357
+## RD23_R1.fastq      5000      4539
+## RD24_R1.fastq      5000      4212
+## RD3_R1.fastq       5000      4230
+## RD4_R1.fastq       5000      4341
+## RD5_R1.fastq       5000      4233
+## RD6_R1.fastq       5000      4231
+## RD7_R1.fastq       5000      4121
+## RD8_R1.fastq       5000      4244
+## RD9_R1.fastq       5000      4272</code></pre>
+<p>We can see from the output that for most samples, about 600-900 reads were removed from each sample.</p>
 </div>
