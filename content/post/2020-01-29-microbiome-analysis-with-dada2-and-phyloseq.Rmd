@@ -150,4 +150,28 @@ out <- filterAndTrim(fwd=Fs_path,
 out
 ```
 
-We can see from the output that for most samples, about 600-900 reads were removed from each sample.
+We can see from the output that for most samples, about 600-900 reads were removed from each sample. This seems pretty reasonable. If you find that most of your reads are being thrown out, then you may need to tweak your filtering parameters.
+
+
+# Learn the Error Rates and Infer Sequences
+
+High throughput sequencing is not perfect...in fact is pretty error prone. Sometimes you'll see workflows estimate their error rates by sequencing a mock community (which is a good idea). However, DADA2 leverages some statistical magic (a parametric error model) to estimate sequencing errors by comparing amplicons to the most abundant amplicons present in your sample. The default is to use 1x10^8^ (recommended), but to spead things up, I'll use 1e^7^ reads.
+
+```{r cache=TRUE}
+# Forward read estimates
+errF <- learnErrors(Fs_path_filtered, nbases = 1e7, multithread=TRUE)
+
+# Reverse read estimates
+errF <- learnErrors(Rs_path_filtered, nbases = 1e7, multithread=TRUE)
+```
+
+Now that you've estimated the error rates, we need to go back to our samples and analyze each read and infer it's true sequence given the error rates. Basically, it's going to determine the number of *unique* reads per sample.
+
+```{r cache=TRUE}
+# Infer forward reads
+dadaFs <- dada(Fs_path_filtered, err=errF, multithread=TRUE)
+
+# Infer reverse reads
+dadaRs <- dada(Rs_path_filtered, err=errF, multithread=TRUE)
+```
+

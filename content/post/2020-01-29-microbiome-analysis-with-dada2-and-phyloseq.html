@@ -32,6 +32,7 @@ image:
 <li><a href="#check-read-quality">Check Read Quality</a></li>
 </ul></li>
 <li><a href="#read-filtering">Read Filtering</a></li>
+<li><a href="#learn-the-error-rates-and-infer-sequences">Learn the Error Rates and Infer Sequences</a></li>
 </ul>
 </div>
 
@@ -185,5 +186,116 @@ out</code></pre>
 ## RD7_R1.fastq       5000      4121
 ## RD8_R1.fastq       5000      4244
 ## RD9_R1.fastq       5000      4272</code></pre>
-<p>We can see from the output that for most samples, about 600-900 reads were removed from each sample.</p>
+<p>We can see from the output that for most samples, about 600-900 reads were removed from each sample. This seems pretty reasonable. If you find that most of your reads are being thrown out, then you may need to tweak your filtering parameters.</p>
+</div>
+<div id="learn-the-error-rates-and-infer-sequences" class="section level1">
+<h1>Learn the Error Rates and Infer Sequences</h1>
+<p>High throughput sequencing is not perfect…in fact is pretty error prone. Sometimes you’ll see workflows estimate their error rates by sequencing a mock community (which is a good idea). However, DADA2 leverages some statistical magic (a parametric error model) to estimate sequencing errors by comparing amplicons to the most abundant amplicons present in your sample. The default is to use 1x10<sup>8</sup> (recommended), but to spead things up, I’ll use 1e<sup>7</sup> reads.</p>
+<pre class="r"><code># Forward read estimates
+errF &lt;- learnErrors(Fs_path_filtered, nbases = 1e7, multithread=TRUE)</code></pre>
+<pre><code>## 10805600 total bases in 54028 reads from 13 samples will be used for learning the error rates.</code></pre>
+<pre class="r"><code># Reverse read estimates
+errF &lt;- learnErrors(Rs_path_filtered, nbases = 1e7, multithread=TRUE)</code></pre>
+<pre><code>## 10025100 total bases in 66834 reads from 16 samples will be used for learning the error rates.</code></pre>
+<p>Now that you’ve estimated the error rates, we need to go back to our samples and analyze each read and infer it’s true sequence given the error rates. Basically, it’s going to determine the number of <em>unique</em> reads per sample.</p>
+<pre class="r"><code># Infer forward reads
+dadaFs &lt;- dada(Fs_path_filtered, err=errF, multithread=TRUE)</code></pre>
+<pre><code>## Sample 1 - 4013 reads in 1776 unique sequences.
+## Sample 2 - 4137 reads in 1641 unique sequences.
+## Sample 3 - 4320 reads in 1653 unique sequences.
+## Sample 4 - 4075 reads in 1717 unique sequences.
+## Sample 5 - 4111 reads in 1770 unique sequences.
+## Sample 6 - 4370 reads in 1761 unique sequences.
+## Sample 7 - 4075 reads in 1574 unique sequences.
+## Sample 8 - 4317 reads in 1929 unique sequences.
+## Sample 9 - 4169 reads in 1876 unique sequences.
+## Sample 10 - 4108 reads in 1922 unique sequences.
+## Sample 11 - 4091 reads in 1811 unique sequences.
+## Sample 12 - 4121 reads in 1744 unique sequences.
+## Sample 13 - 4121 reads in 1893 unique sequences.
+## Sample 14 - 4061 reads in 1823 unique sequences.
+## Sample 15 - 4542 reads in 1915 unique sequences.
+## Sample 16 - 4203 reads in 1773 unique sequences.
+## Sample 17 - 4219 reads in 1835 unique sequences.
+## Sample 18 - 4358 reads in 1580 unique sequences.
+## Sample 19 - 4247 reads in 1693 unique sequences.
+## Sample 20 - 4260 reads in 1795 unique sequences.
+## Sample 21 - 4314 reads in 1735 unique sequences.
+## Sample 22 - 4066 reads in 1598 unique sequences.
+## Sample 23 - 4056 reads in 1667 unique sequences.
+## Sample 24 - 4071 reads in 1624 unique sequences.
+## Sample 25 - 4173 reads in 1854 unique sequences.
+## Sample 26 - 4264 reads in 1794 unique sequences.
+## Sample 27 - 4276 reads in 2022 unique sequences.
+## Sample 28 - 4208 reads in 1871 unique sequences.
+## Sample 29 - 4272 reads in 1911 unique sequences.
+## Sample 30 - 4189 reads in 1834 unique sequences.
+## Sample 31 - 4390 reads in 1768 unique sequences.
+## Sample 32 - 4182 reads in 1851 unique sequences.
+## Sample 33 - 4529 reads in 1839 unique sequences.
+## Sample 34 - 4135 reads in 1782 unique sequences.
+## Sample 35 - 4090 reads in 1773 unique sequences.
+## Sample 36 - 4103 reads in 1937 unique sequences.
+## Sample 37 - 4253 reads in 1758 unique sequences.
+## Sample 38 - 4214 reads in 1781 unique sequences.
+## Sample 39 - 4357 reads in 2018 unique sequences.
+## Sample 40 - 4539 reads in 1643 unique sequences.
+## Sample 41 - 4212 reads in 1679 unique sequences.
+## Sample 42 - 4230 reads in 2000 unique sequences.
+## Sample 43 - 4341 reads in 1931 unique sequences.
+## Sample 44 - 4233 reads in 1798 unique sequences.
+## Sample 45 - 4231 reads in 1769 unique sequences.
+## Sample 46 - 4121 reads in 1796 unique sequences.
+## Sample 47 - 4244 reads in 1887 unique sequences.
+## Sample 48 - 4272 reads in 1702 unique sequences.</code></pre>
+<pre class="r"><code># Infer reverse reads
+dadaRs &lt;- dada(Rs_path_filtered, err=errF, multithread=TRUE)</code></pre>
+<pre><code>## Sample 1 - 4013 reads in 1762 unique sequences.
+## Sample 2 - 4137 reads in 1692 unique sequences.
+## Sample 3 - 4320 reads in 1713 unique sequences.
+## Sample 4 - 4075 reads in 1679 unique sequences.
+## Sample 5 - 4111 reads in 1770 unique sequences.
+## Sample 6 - 4370 reads in 1713 unique sequences.
+## Sample 7 - 4075 reads in 1634 unique sequences.
+## Sample 8 - 4317 reads in 1883 unique sequences.
+## Sample 9 - 4169 reads in 1878 unique sequences.
+## Sample 10 - 4108 reads in 1891 unique sequences.
+## Sample 11 - 4091 reads in 1747 unique sequences.
+## Sample 12 - 4121 reads in 1728 unique sequences.
+## Sample 13 - 4121 reads in 1975 unique sequences.
+## Sample 14 - 4061 reads in 1790 unique sequences.
+## Sample 15 - 4542 reads in 1991 unique sequences.
+## Sample 16 - 4203 reads in 1850 unique sequences.
+## Sample 17 - 4219 reads in 1796 unique sequences.
+## Sample 18 - 4358 reads in 1625 unique sequences.
+## Sample 19 - 4247 reads in 1727 unique sequences.
+## Sample 20 - 4260 reads in 1832 unique sequences.
+## Sample 21 - 4314 reads in 1697 unique sequences.
+## Sample 22 - 4066 reads in 1617 unique sequences.
+## Sample 23 - 4056 reads in 1679 unique sequences.
+## Sample 24 - 4071 reads in 1669 unique sequences.
+## Sample 25 - 4173 reads in 1850 unique sequences.
+## Sample 26 - 4264 reads in 1697 unique sequences.
+## Sample 27 - 4276 reads in 1918 unique sequences.
+## Sample 28 - 4208 reads in 1805 unique sequences.
+## Sample 29 - 4272 reads in 1892 unique sequences.
+## Sample 30 - 4189 reads in 1810 unique sequences.
+## Sample 31 - 4390 reads in 1750 unique sequences.
+## Sample 32 - 4182 reads in 1905 unique sequences.
+## Sample 33 - 4529 reads in 1790 unique sequences.
+## Sample 34 - 4135 reads in 1749 unique sequences.
+## Sample 35 - 4090 reads in 1772 unique sequences.
+## Sample 36 - 4103 reads in 1911 unique sequences.
+## Sample 37 - 4253 reads in 1720 unique sequences.
+## Sample 38 - 4214 reads in 1720 unique sequences.
+## Sample 39 - 4357 reads in 2002 unique sequences.
+## Sample 40 - 4539 reads in 1614 unique sequences.
+## Sample 41 - 4212 reads in 1695 unique sequences.
+## Sample 42 - 4230 reads in 1963 unique sequences.
+## Sample 43 - 4341 reads in 1941 unique sequences.
+## Sample 44 - 4233 reads in 1744 unique sequences.
+## Sample 45 - 4231 reads in 1668 unique sequences.
+## Sample 46 - 4121 reads in 1800 unique sequences.
+## Sample 47 - 4244 reads in 1831 unique sequences.
+## Sample 48 - 4272 reads in 1654 unique sequences.</code></pre>
 </div>
