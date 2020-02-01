@@ -42,7 +42,7 @@ image:
 
 <div id="introduction" class="section level1">
 <h1>Introduction</h1>
-<p>The purpose of this post will be to guide researchers through a basic analysis of microbiome data using R packages <code>DADA2</code> and <code>Phyloseq</code>. Most concepts will be discussed at a very high level and I won’t spend too much time digging into the weeds of the analysis.</p>
+<p>The purpose of this post will be to guide researchers through a basic analysis of microbiome data using R packages <code>DADA2</code> and <code>Phyloseq</code>. Most concepts will be discussed at a very high level and I won’t spend too much time digging into the weeds of the analysis. For more in-depth analysis, check out this <a href="https://benjjneb.github.io/dada2/tutorial.html">pipeline tutorial</a> which was heavily referenced when creating this tutorial.</p>
 <p>We will be analyzing a very small subset of data that was used in part to look at differences in microbiome structure between mice given a regular diet (<strong>RD</strong>, n = 24) versus a diet with no isoflavones (<strong>NIF</strong>, n = 24). Fecal samples from each mouse were collected 2 weeks after being fed either the RD or NIF diets. Samples were processed in the lab and subjected to Illumina MiSeq 300 base paired-end sequencing. We specifically targeted the V4 variable region of the 16S rRNA gene for sequencing. Reads from each sample were subsampled to 5000 reads/sample just to make the data a bit more manageable.</p>
 </div>
 <div id="set-up-your-environment" class="section level1">
