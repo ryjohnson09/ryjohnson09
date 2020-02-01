@@ -58,6 +58,9 @@ BiocManager::install("phyloseq")
 
 # Tidyverse install
 install.packages("tidyverse")
+
+# KableExtra for pretty tables
+install.packages("kableExtra")
 ```
 
 
@@ -66,6 +69,7 @@ install.packages("tidyverse")
 library(dada2)
 library(phyloseq)
 library(tidyverse)
+library(kableExtra)
 ```
 
 
@@ -173,5 +177,55 @@ dadaFs <- dada(Fs_path_filtered, err=errF, multithread=TRUE)
 
 # Infer reverse reads
 dadaRs <- dada(Rs_path_filtered, err=errF, multithread=TRUE)
+```
+
+# Merge Forward and Reverse Reads
+
+Now that the reads have be de-noised, we can merge the forward and reverse reads together to form a **contig**. Again, the forward and reverse reads need at least 12 base pairs of overlap to be merged. The more overlap the better:
+
+```{r cache=TRUE}
+mergers <- mergePairs(dadaFs, Fs_path_filtered, 
+                      dadaRs, Rs_path_filtered, verbose=TRUE)
+```
+
+# Construct Sequence Table
+
+We can now construct an amplicon sequence variant table (ASV) table. It's important to know the difference between an ASV and an OTU...but I'll leave that up to you to figure out :)
+
+This table is a matrix with each row representing the samples, columns are the various ASVs, and each cell shows the number of that specific ASV within each sample.
+
+```{r cache=TRUE}
+seqtab <- makeSequenceTable(mergers)
+```
+
+
+# Remove chimeras
+
+Next dada2 will align each ASV to the other ASVs, and if an ASV's left and right side align to two separate more abundant ASVs, the it will be flagged as a chimera and removed.
+
+```{r cache=TRUE}
+seqtab_nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=TRUE, verbose=TRUE)
+```
+
+Now let's add up all of the reads from the original `seqtab` and the chimera-remove `seqtab_nochim` and see what percentage of merged sequence reads were considered chimeras.
+
+```{r}
+num_chim_removed <- 1 - (sum(seqtab_nochim)/sum(seqtab))
+
+num_chim_removed
+```
+
+You can see from the difference between the number of columns in `seqtab` (`r dim(seqtab)[2]`) and `seqtab_nochim` (`r dim(seqtab_nochim)[2]`) that while `r dim(seqtab)[2] - dim(seqtab_nochim)[2]` ASVs were removed, it only represented `r num_chim_removed` percent of the total number of merged sequence reads.
+
+# Tracking Reads throughout Pipeline
+
+As a final check, it is nice to see how many reads you started with, and how many were lost/merged at each step along the way.
+
+```{r}
+getN <- function(x) sum(getUniques(x))
+track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab_nochim))
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track) <- mouse_sample_names
+kableExtra::kable(track)
 ```
 

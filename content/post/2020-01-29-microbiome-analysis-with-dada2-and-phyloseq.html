@@ -33,6 +33,10 @@ image:
 </ul></li>
 <li><a href="#read-filtering">Read Filtering</a></li>
 <li><a href="#learn-the-error-rates-and-infer-sequences">Learn the Error Rates and Infer Sequences</a></li>
+<li><a href="#merge-forward-and-reverse-reads">Merge Forward and Reverse Reads</a></li>
+<li><a href="#construct-sequence-table">Construct Sequence Table</a></li>
+<li><a href="#remove-chimeras">Remove chimeras</a></li>
+<li><a href="#tracking-reads-throughout-pipeline">Tracking Reads throughout Pipeline</a></li>
 </ul>
 </div>
 
@@ -69,11 +73,15 @@ if (!requireNamespace(&quot;BiocManager&quot;, quietly = TRUE))
 BiocManager::install(&quot;phyloseq&quot;)
 
 # Tidyverse install
-install.packages(&quot;tidyverse&quot;)</code></pre>
+install.packages(&quot;tidyverse&quot;)
+
+# KableExtra for pretty tables
+install.packages(&quot;kableExtra&quot;)</code></pre>
 <pre class="r"><code># Load packages
 library(dada2)
 library(phyloseq)
-library(tidyverse)</code></pre>
+library(tidyverse)
+library(kableExtra)</code></pre>
 </div>
 </div>
 <div id="set-up-working-environment" class="section level1">
@@ -298,4 +306,1217 @@ dadaRs &lt;- dada(Rs_path_filtered, err=errF, multithread=TRUE)</code></pre>
 ## Sample 46 - 4121 reads in 1800 unique sequences.
 ## Sample 47 - 4244 reads in 1831 unique sequences.
 ## Sample 48 - 4272 reads in 1654 unique sequences.</code></pre>
+</div>
+<div id="merge-forward-and-reverse-reads" class="section level1">
+<h1>Merge Forward and Reverse Reads</h1>
+<p>Now that the reads have be de-noised, we can merge the forward and reverse reads together to form a <strong>contig</strong>. Again, the forward and reverse reads need at least 12 base pairs of overlap to be merged. The more overlap the better:</p>
+<pre class="r"><code>mergers &lt;- mergePairs(dadaFs, Fs_path_filtered, 
+                      dadaRs, Rs_path_filtered, verbose=TRUE)</code></pre>
+<pre><code>## 3694 paired-reads (in 36 unique pairings) successfully merged out of 3918 (in 142 pairings) input.</code></pre>
+<pre><code>## 3933 paired-reads (in 21 unique pairings) successfully merged out of 4060 (in 77 pairings) input.</code></pre>
+<pre><code>## 4063 paired-reads (in 36 unique pairings) successfully merged out of 4255 (in 138 pairings) input.</code></pre>
+<pre><code>## 3786 paired-reads (in 29 unique pairings) successfully merged out of 3941 (in 105 pairings) input.</code></pre>
+<pre><code>## 3778 paired-reads (in 30 unique pairings) successfully merged out of 3980 (in 125 pairings) input.</code></pre>
+<pre><code>## 4073 paired-reads (in 37 unique pairings) successfully merged out of 4250 (in 131 pairings) input.</code></pre>
+<pre><code>## 3762 paired-reads (in 35 unique pairings) successfully merged out of 3990 (in 125 pairings) input.</code></pre>
+<pre><code>## 3837 paired-reads (in 44 unique pairings) successfully merged out of 4194 (in 204 pairings) input.</code></pre>
+<pre><code>## 3778 paired-reads (in 35 unique pairings) successfully merged out of 4054 (in 167 pairings) input.</code></pre>
+<pre><code>## 3558 paired-reads (in 44 unique pairings) successfully merged out of 3961 (in 239 pairings) input.</code></pre>
+<pre><code>## 3680 paired-reads (in 41 unique pairings) successfully merged out of 3991 (in 181 pairings) input.</code></pre>
+<pre><code>## 3736 paired-reads (in 32 unique pairings) successfully merged out of 4011 (in 139 pairings) input.</code></pre>
+<pre><code>## 3662 paired-reads (in 51 unique pairings) successfully merged out of 4005 (in 220 pairings) input.</code></pre>
+<pre><code>## 3663 paired-reads (in 36 unique pairings) successfully merged out of 3947 (in 153 pairings) input.</code></pre>
+<pre><code>## 4085 paired-reads (in 47 unique pairings) successfully merged out of 4416 (in 217 pairings) input.</code></pre>
+<pre><code>## 3854 paired-reads (in 37 unique pairings) successfully merged out of 4065 (in 157 pairings) input.</code></pre>
+<pre><code>## 3883 paired-reads (in 41 unique pairings) successfully merged out of 4097 (in 171 pairings) input.</code></pre>
+<pre><code>## 4130 paired-reads (in 33 unique pairings) successfully merged out of 4270 (in 90 pairings) input.</code></pre>
+<pre><code>## 3992 paired-reads (in 33 unique pairings) successfully merged out of 4155 (in 108 pairings) input.</code></pre>
+<pre><code>## 3958 paired-reads (in 33 unique pairings) successfully merged out of 4175 (in 132 pairings) input.</code></pre>
+<pre><code>## 3996 paired-reads (in 33 unique pairings) successfully merged out of 4215 (in 105 pairings) input.</code></pre>
+<pre><code>## 3855 paired-reads (in 36 unique pairings) successfully merged out of 4001 (in 102 pairings) input.</code></pre>
+<pre><code>## 3738 paired-reads (in 34 unique pairings) successfully merged out of 3962 (in 114 pairings) input.</code></pre>
+<pre><code>## 3757 paired-reads (in 30 unique pairings) successfully merged out of 3971 (in 110 pairings) input.</code></pre>
+<pre><code>## 3705 paired-reads (in 41 unique pairings) successfully merged out of 4034 (in 170 pairings) input.</code></pre>
+<pre><code>## 3797 paired-reads (in 33 unique pairings) successfully merged out of 4158 (in 144 pairings) input.</code></pre>
+<pre><code>## 3758 paired-reads (in 49 unique pairings) successfully merged out of 4126 (in 213 pairings) input.</code></pre>
+<pre><code>## 3664 paired-reads (in 40 unique pairings) successfully merged out of 4060 (in 173 pairings) input.</code></pre>
+<pre><code>## 3894 paired-reads (in 58 unique pairings) successfully merged out of 4152 (in 181 pairings) input.</code></pre>
+<pre><code>## 3754 paired-reads (in 45 unique pairings) successfully merged out of 4056 (in 175 pairings) input.</code></pre>
+<pre><code>## 3988 paired-reads (in 44 unique pairings) successfully merged out of 4218 (in 156 pairings) input.</code></pre>
+<pre><code>## 3719 paired-reads (in 50 unique pairings) successfully merged out of 4064 (in 198 pairings) input.</code></pre>
+<pre><code>## 3986 paired-reads (in 40 unique pairings) successfully merged out of 4351 (in 144 pairings) input.</code></pre>
+<pre><code>## 3761 paired-reads (in 42 unique pairings) successfully merged out of 4035 (in 139 pairings) input.</code></pre>
+<pre><code>## 3642 paired-reads (in 38 unique pairings) successfully merged out of 3966 (in 174 pairings) input.</code></pre>
+<pre><code>## 3583 paired-reads (in 45 unique pairings) successfully merged out of 3966 (in 206 pairings) input.</code></pre>
+<pre><code>## 3799 paired-reads (in 42 unique pairings) successfully merged out of 4116 (in 159 pairings) input.</code></pre>
+<pre><code>## 3749 paired-reads (in 41 unique pairings) successfully merged out of 4104 (in 160 pairings) input.</code></pre>
+<pre><code>## 3888 paired-reads (in 53 unique pairings) successfully merged out of 4194 (in 210 pairings) input.</code></pre>
+<pre><code>## 4224 paired-reads (in 45 unique pairings) successfully merged out of 4386 (in 119 pairings) input.</code></pre>
+<pre><code>## 3720 paired-reads (in 44 unique pairings) successfully merged out of 4044 (in 123 pairings) input.</code></pre>
+<pre><code>## 3660 paired-reads (in 49 unique pairings) successfully merged out of 4067 (in 216 pairings) input.</code></pre>
+<pre><code>## 3925 paired-reads (in 53 unique pairings) successfully merged out of 4218 (in 164 pairings) input.</code></pre>
+<pre><code>## 3865 paired-reads (in 45 unique pairings) successfully merged out of 4118 (in 172 pairings) input.</code></pre>
+<pre><code>## 3807 paired-reads (in 39 unique pairings) successfully merged out of 4117 (in 135 pairings) input.</code></pre>
+<pre><code>## 3757 paired-reads (in 46 unique pairings) successfully merged out of 4006 (in 166 pairings) input.</code></pre>
+<pre><code>## 3799 paired-reads (in 53 unique pairings) successfully merged out of 4145 (in 194 pairings) input.</code></pre>
+<pre><code>## 3817 paired-reads (in 43 unique pairings) successfully merged out of 4153 (in 157 pairings) input.</code></pre>
+</div>
+<div id="construct-sequence-table" class="section level1">
+<h1>Construct Sequence Table</h1>
+<p>We can now construct an amplicon sequence variant table (ASV) table. It’s important to know the difference between an ASV and an OTU…but I’ll leave that up to you to figure out :)</p>
+<p>This table is a matrix with each row representing the samples, columns are the various ASVs, and each cell shows the number of that specific ASV within each sample.</p>
+<pre class="r"><code>seqtab &lt;- makeSequenceTable(mergers)</code></pre>
+</div>
+<div id="remove-chimeras" class="section level1">
+<h1>Remove chimeras</h1>
+<p>Next dada2 will align each ASV to the other ASVs, and if an ASV’s left and right side align to two separate more abundant ASVs, the it will be flagged as a chimera and removed.</p>
+<pre class="r"><code>seqtab_nochim &lt;- removeBimeraDenovo(seqtab, method=&quot;consensus&quot;, multithread=TRUE, verbose=TRUE)</code></pre>
+<pre><code>## Identified 42 bimeras out of 323 input sequences.</code></pre>
+<p>Now let’s add up all of the reads from the original <code>seqtab</code> and the chimera-remove <code>seqtab_nochim</code> and see what percentage of merged sequence reads were considered chimeras.</p>
+<pre class="r"><code>num_chim_removed &lt;- 1 - (sum(seqtab_nochim)/sum(seqtab))
+
+num_chim_removed</code></pre>
+<pre><code>## [1] 0.01666921</code></pre>
+<p>You can see from the difference between the number of columns in <code>seqtab</code> (323) and <code>seqtab_nochim</code> (281) that while 42 ASVs were removed, it only represented 0.0166692 percent of the total number of merged sequence reads.</p>
+</div>
+<div id="tracking-reads-throughout-pipeline" class="section level1">
+<h1>Tracking Reads throughout Pipeline</h1>
+<p>As a final check, it is nice to see how many reads you started with, and how many were lost/merged at each step along the way.</p>
+<pre class="r"><code>getN &lt;- function(x) sum(getUniques(x))
+track &lt;- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab_nochim))
+colnames(track) &lt;- c(&quot;input&quot;, &quot;filtered&quot;, &quot;denoisedF&quot;, &quot;denoisedR&quot;, &quot;merged&quot;, &quot;nonchim&quot;)
+rownames(track) &lt;- mouse_sample_names
+kableExtra::kable(track)</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align:left;">
+</th>
+<th style="text-align:right;">
+input
+</th>
+<th style="text-align:right;">
+filtered
+</th>
+<th style="text-align:right;">
+denoisedF
+</th>
+<th style="text-align:right;">
+denoisedR
+</th>
+<th style="text-align:right;">
+merged
+</th>
+<th style="text-align:right;">
+nonchim
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+NIF1
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4013
+</td>
+<td style="text-align:right;">
+3937
+</td>
+<td style="text-align:right;">
+3981
+</td>
+<td style="text-align:right;">
+3694
+</td>
+<td style="text-align:right;">
+3604
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF10
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4137
+</td>
+<td style="text-align:right;">
+4075
+</td>
+<td style="text-align:right;">
+4112
+</td>
+<td style="text-align:right;">
+3933
+</td>
+<td style="text-align:right;">
+3898
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF11
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4320
+</td>
+<td style="text-align:right;">
+4273
+</td>
+<td style="text-align:right;">
+4293
+</td>
+<td style="text-align:right;">
+4063
+</td>
+<td style="text-align:right;">
+4001
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF12
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4075
+</td>
+<td style="text-align:right;">
+3980
+</td>
+<td style="text-align:right;">
+4026
+</td>
+<td style="text-align:right;">
+3786
+</td>
+<td style="text-align:right;">
+3761
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF13
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4111
+</td>
+<td style="text-align:right;">
+4007
+</td>
+<td style="text-align:right;">
+4073
+</td>
+<td style="text-align:right;">
+3778
+</td>
+<td style="text-align:right;">
+3738
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF14
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4370
+</td>
+<td style="text-align:right;">
+4300
+</td>
+<td style="text-align:right;">
+4311
+</td>
+<td style="text-align:right;">
+4073
+</td>
+<td style="text-align:right;">
+4040
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF15
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4075
+</td>
+<td style="text-align:right;">
+4015
+</td>
+<td style="text-align:right;">
+4039
+</td>
+<td style="text-align:right;">
+3762
+</td>
+<td style="text-align:right;">
+3725
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF16
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4317
+</td>
+<td style="text-align:right;">
+4236
+</td>
+<td style="text-align:right;">
+4258
+</td>
+<td style="text-align:right;">
+3837
+</td>
+<td style="text-align:right;">
+3684
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF17
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4169
+</td>
+<td style="text-align:right;">
+4089
+</td>
+<td style="text-align:right;">
+4129
+</td>
+<td style="text-align:right;">
+3778
+</td>
+<td style="text-align:right;">
+3746
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF18
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4108
+</td>
+<td style="text-align:right;">
+4017
+</td>
+<td style="text-align:right;">
+4042
+</td>
+<td style="text-align:right;">
+3558
+</td>
+<td style="text-align:right;">
+3505
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF19
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4091
+</td>
+<td style="text-align:right;">
+4013
+</td>
+<td style="text-align:right;">
+4060
+</td>
+<td style="text-align:right;">
+3680
+</td>
+<td style="text-align:right;">
+3637
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF2
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4121
+</td>
+<td style="text-align:right;">
+4040
+</td>
+<td style="text-align:right;">
+4080
+</td>
+<td style="text-align:right;">
+3736
+</td>
+<td style="text-align:right;">
+3716
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF20
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4121
+</td>
+<td style="text-align:right;">
+4052
+</td>
+<td style="text-align:right;">
+4068
+</td>
+<td style="text-align:right;">
+3662
+</td>
+<td style="text-align:right;">
+3645
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF21
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4061
+</td>
+<td style="text-align:right;">
+3972
+</td>
+<td style="text-align:right;">
+4023
+</td>
+<td style="text-align:right;">
+3663
+</td>
+<td style="text-align:right;">
+3642
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF22
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4542
+</td>
+<td style="text-align:right;">
+4479
+</td>
+<td style="text-align:right;">
+4475
+</td>
+<td style="text-align:right;">
+4085
+</td>
+<td style="text-align:right;">
+4036
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF23
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4203
+</td>
+<td style="text-align:right;">
+4118
+</td>
+<td style="text-align:right;">
+4127
+</td>
+<td style="text-align:right;">
+3854
+</td>
+<td style="text-align:right;">
+3832
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF24
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4219
+</td>
+<td style="text-align:right;">
+4133
+</td>
+<td style="text-align:right;">
+4172
+</td>
+<td style="text-align:right;">
+3883
+</td>
+<td style="text-align:right;">
+3845
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF3
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4358
+</td>
+<td style="text-align:right;">
+4290
+</td>
+<td style="text-align:right;">
+4332
+</td>
+<td style="text-align:right;">
+4130
+</td>
+<td style="text-align:right;">
+4043
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF4
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4247
+</td>
+<td style="text-align:right;">
+4179
+</td>
+<td style="text-align:right;">
+4221
+</td>
+<td style="text-align:right;">
+3992
+</td>
+<td style="text-align:right;">
+3950
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF5
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4260
+</td>
+<td style="text-align:right;">
+4197
+</td>
+<td style="text-align:right;">
+4233
+</td>
+<td style="text-align:right;">
+3958
+</td>
+<td style="text-align:right;">
+3945
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF6
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4314
+</td>
+<td style="text-align:right;">
+4240
+</td>
+<td style="text-align:right;">
+4281
+</td>
+<td style="text-align:right;">
+3996
+</td>
+<td style="text-align:right;">
+3996
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF7
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4066
+</td>
+<td style="text-align:right;">
+4018
+</td>
+<td style="text-align:right;">
+4041
+</td>
+<td style="text-align:right;">
+3855
+</td>
+<td style="text-align:right;">
+3837
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF8
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4056
+</td>
+<td style="text-align:right;">
+3998
+</td>
+<td style="text-align:right;">
+4015
+</td>
+<td style="text-align:right;">
+3738
+</td>
+<td style="text-align:right;">
+3720
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF9
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4071
+</td>
+<td style="text-align:right;">
+3991
+</td>
+<td style="text-align:right;">
+4042
+</td>
+<td style="text-align:right;">
+3757
+</td>
+<td style="text-align:right;">
+3742
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD1
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4173
+</td>
+<td style="text-align:right;">
+4061
+</td>
+<td style="text-align:right;">
+4133
+</td>
+<td style="text-align:right;">
+3705
+</td>
+<td style="text-align:right;">
+3670
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD10
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4264
+</td>
+<td style="text-align:right;">
+4183
+</td>
+<td style="text-align:right;">
+4230
+</td>
+<td style="text-align:right;">
+3797
+</td>
+<td style="text-align:right;">
+3743
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD11
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4276
+</td>
+<td style="text-align:right;">
+4167
+</td>
+<td style="text-align:right;">
+4229
+</td>
+<td style="text-align:right;">
+3758
+</td>
+<td style="text-align:right;">
+3680
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD12
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4208
+</td>
+<td style="text-align:right;">
+4090
+</td>
+<td style="text-align:right;">
+4160
+</td>
+<td style="text-align:right;">
+3664
+</td>
+<td style="text-align:right;">
+3556
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD13
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4272
+</td>
+<td style="text-align:right;">
+4171
+</td>
+<td style="text-align:right;">
+4245
+</td>
+<td style="text-align:right;">
+3894
+</td>
+<td style="text-align:right;">
+3805
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD14
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4189
+</td>
+<td style="text-align:right;">
+4108
+</td>
+<td style="text-align:right;">
+4132
+</td>
+<td style="text-align:right;">
+3754
+</td>
+<td style="text-align:right;">
+3676
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD15
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4390
+</td>
+<td style="text-align:right;">
+4252
+</td>
+<td style="text-align:right;">
+4346
+</td>
+<td style="text-align:right;">
+3988
+</td>
+<td style="text-align:right;">
+3858
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD16
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4182
+</td>
+<td style="text-align:right;">
+4090
+</td>
+<td style="text-align:right;">
+4141
+</td>
+<td style="text-align:right;">
+3719
+</td>
+<td style="text-align:right;">
+3659
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD17
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4529
+</td>
+<td style="text-align:right;">
+4395
+</td>
+<td style="text-align:right;">
+4474
+</td>
+<td style="text-align:right;">
+3986
+</td>
+<td style="text-align:right;">
+3946
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD18
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4135
+</td>
+<td style="text-align:right;">
+4065
+</td>
+<td style="text-align:right;">
+4099
+</td>
+<td style="text-align:right;">
+3761
+</td>
+<td style="text-align:right;">
+3728
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD19
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4090
+</td>
+<td style="text-align:right;">
+4007
+</td>
+<td style="text-align:right;">
+4043
+</td>
+<td style="text-align:right;">
+3642
+</td>
+<td style="text-align:right;">
+3602
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD2
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4103
+</td>
+<td style="text-align:right;">
+4019
+</td>
+<td style="text-align:right;">
+4038
+</td>
+<td style="text-align:right;">
+3583
+</td>
+<td style="text-align:right;">
+3527
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD20
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4253
+</td>
+<td style="text-align:right;">
+4164
+</td>
+<td style="text-align:right;">
+4192
+</td>
+<td style="text-align:right;">
+3799
+</td>
+<td style="text-align:right;">
+3764
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD21
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4214
+</td>
+<td style="text-align:right;">
+4124
+</td>
+<td style="text-align:right;">
+4183
+</td>
+<td style="text-align:right;">
+3749
+</td>
+<td style="text-align:right;">
+3691
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD22
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4357
+</td>
+<td style="text-align:right;">
+4252
+</td>
+<td style="text-align:right;">
+4289
+</td>
+<td style="text-align:right;">
+3888
+</td>
+<td style="text-align:right;">
+3837
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD23
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4539
+</td>
+<td style="text-align:right;">
+4418
+</td>
+<td style="text-align:right;">
+4491
+</td>
+<td style="text-align:right;">
+4224
+</td>
+<td style="text-align:right;">
+3978
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD24
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4212
+</td>
+<td style="text-align:right;">
+4114
+</td>
+<td style="text-align:right;">
+4129
+</td>
+<td style="text-align:right;">
+3720
+</td>
+<td style="text-align:right;">
+3429
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD3
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4230
+</td>
+<td style="text-align:right;">
+4119
+</td>
+<td style="text-align:right;">
+4157
+</td>
+<td style="text-align:right;">
+3660
+</td>
+<td style="text-align:right;">
+3629
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD4
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4341
+</td>
+<td style="text-align:right;">
+4247
+</td>
+<td style="text-align:right;">
+4298
+</td>
+<td style="text-align:right;">
+3925
+</td>
+<td style="text-align:right;">
+3838
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD5
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4233
+</td>
+<td style="text-align:right;">
+4145
+</td>
+<td style="text-align:right;">
+4195
+</td>
+<td style="text-align:right;">
+3865
+</td>
+<td style="text-align:right;">
+3838
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD6
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4231
+</td>
+<td style="text-align:right;">
+4133
+</td>
+<td style="text-align:right;">
+4196
+</td>
+<td style="text-align:right;">
+3807
+</td>
+<td style="text-align:right;">
+3724
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD7
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4121
+</td>
+<td style="text-align:right;">
+4043
+</td>
+<td style="text-align:right;">
+4078
+</td>
+<td style="text-align:right;">
+3757
+</td>
+<td style="text-align:right;">
+3640
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD8
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4244
+</td>
+<td style="text-align:right;">
+4150
+</td>
+<td style="text-align:right;">
+4223
+</td>
+<td style="text-align:right;">
+3799
+</td>
+<td style="text-align:right;">
+3680
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD9
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4272
+</td>
+<td style="text-align:right;">
+4182
+</td>
+<td style="text-align:right;">
+4226
+</td>
+<td style="text-align:right;">
+3817
+</td>
+<td style="text-align:right;">
+3667
+</td>
+</tr>
+</tbody>
+</table>
 </div>
