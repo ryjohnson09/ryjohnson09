@@ -38,7 +38,13 @@ image:
 <li><a href="#remove-chimeras">Remove chimeras</a></li>
 <li><a href="#tracking-reads-throughout-pipeline">Tracking Reads throughout Pipeline</a></li>
 <li><a href="#assign-taxonomy-information">Assign Taxonomy Information</a></li>
-<li><a href="#explore-the-microbiome-data">Explore the Microbiome Data</a></li>
+<li><a href="#phyloseq-object">Phyloseq Object</a></li>
+<li><a href="#taxonomic-filtering">Taxonomic Filtering</a></li>
+<li><a href="#prevalence-filtering">Prevalence Filtering</a></li>
+<li><a href="#visualization-diversity">Visualization / Diversity</a><ul>
+<li><a href="#phylum-relative-abundance">Phylum Relative Abundance</a></li>
+<li><a href="#genus-relative-abundance">Genus Relative Abundance</a></li>
+</ul></li>
 </ul>
 </div>
 
@@ -103,7 +109,7 @@ Rs_path &lt;- sort(list.files(reads_path, pattern=&quot;R2.fastq&quot;, full.nam
 # Create directories for processed forward and reverse reads
 Fs_path_filtered &lt;- file.path(reads_path, &quot;filtered_Fs&quot;)
 Rs_path_filtered &lt;- file.path(reads_path, &quot;filtered_Rs&quot;)</code></pre>
-<p>It will also be useful later on to store the sample names without the R1/R2 and fastq annotation:</p>
+<p>Extract the sample names as well:</p>
 <pre class="r"><code>mouse_sample_names &lt;- str_replace(string = basename(Fs_path), 
                                   pattern = &quot;_R1\\.fastq&quot;,
                                   replacement = &quot;&quot;)</code></pre>
@@ -198,19 +204,27 @@ out</code></pre>
 ## RD8_R1.fastq       5000      4244
 ## RD9_R1.fastq       5000      4272</code></pre>
 <p>We can see from the output that for most samples, about 600-900 reads were removed from each sample. This seems pretty reasonable. If you find that most of your reads are being thrown out, then you may need to tweak your filtering parameters.</p>
+<p>Let’s also rename the samples (so they don’t have the *_R1.fastq* ending):</p>
+<pre class="r"><code># Get list of filtered sequences
+Fs_filt &lt;- list.files(Fs_path_filtered, full.names = TRUE, pattern = &quot;fastq&quot;)
+Rs_filt &lt;- list.files(Rs_path_filtered, full.names = TRUE, pattern = &quot;fastq&quot;)
+
+# Create names
+names(Fs_filt) &lt;- mouse_sample_names
+names(Rs_filt) &lt;- mouse_sample_names</code></pre>
 </div>
 <div id="learn-the-error-rates-and-infer-sequences" class="section level1">
 <h1>Learn the Error Rates and Infer Sequences</h1>
 <p>High throughput sequencing is not perfect…in fact is pretty error prone. Sometimes you’ll see workflows estimate their error rates by sequencing a mock community (which is a good idea). However, DADA2 leverages some statistical magic (a parametric error model) to estimate sequencing errors by comparing amplicons to the most abundant amplicons present in your sample. The default is to use 1x10<sup>8</sup> (recommended), but to spead things up, I’ll use 1e<sup>7</sup> reads.</p>
 <pre class="r"><code># Forward read estimates
-errF &lt;- learnErrors(Fs_path_filtered, nbases = 1e7, multithread=TRUE)</code></pre>
+errF &lt;- learnErrors(Fs_filt, nbases = 1e7, multithread=TRUE)</code></pre>
 <pre><code>## 10805600 total bases in 54028 reads from 13 samples will be used for learning the error rates.</code></pre>
 <pre class="r"><code># Reverse read estimates
-errF &lt;- learnErrors(Rs_path_filtered, nbases = 1e7, multithread=TRUE)</code></pre>
+errF &lt;- learnErrors(Rs_filt, nbases = 1e7, multithread=TRUE)</code></pre>
 <pre><code>## 10025100 total bases in 66834 reads from 16 samples will be used for learning the error rates.</code></pre>
 <p>Now that you’ve estimated the error rates, we need to go back to our samples and analyze each read and infer it’s true sequence given the error rates. Basically, it’s going to determine the number of <em>unique</em> reads per sample.</p>
 <pre class="r"><code># Infer forward reads
-dadaFs &lt;- dada(Fs_path_filtered, err=errF, multithread=TRUE)</code></pre>
+dadaFs &lt;- dada(Fs_filt, err=errF, multithread=TRUE)</code></pre>
 <pre><code>## Sample 1 - 4013 reads in 1776 unique sequences.
 ## Sample 2 - 4137 reads in 1641 unique sequences.
 ## Sample 3 - 4320 reads in 1653 unique sequences.
@@ -260,7 +274,7 @@ dadaFs &lt;- dada(Fs_path_filtered, err=errF, multithread=TRUE)</code></pre>
 ## Sample 47 - 4244 reads in 1887 unique sequences.
 ## Sample 48 - 4272 reads in 1702 unique sequences.</code></pre>
 <pre class="r"><code># Infer reverse reads
-dadaRs &lt;- dada(Rs_path_filtered, err=errF, multithread=TRUE)</code></pre>
+dadaRs &lt;- dada(Rs_filt, err=errF, multithread=TRUE)</code></pre>
 <pre><code>## Sample 1 - 4013 reads in 1762 unique sequences.
 ## Sample 2 - 4137 reads in 1692 unique sequences.
 ## Sample 3 - 4320 reads in 1713 unique sequences.
@@ -1528,7 +1542,177 @@ RD9
 <p>We can now assign taxonomy information to each ASV in our study. To do this, we’ll use DADA2’s native implementation of the naive Bayesian classifier method. This step may take a minute or two.</p>
 <pre class="r"><code>taxa &lt;- assignTaxonomy(seqtab_nochim, &quot;data/mouse_samples/silva_nr_v132_train_set.fa.gz&quot;, multithread=TRUE)</code></pre>
 </div>
-<div id="explore-the-microbiome-data" class="section level1">
-<h1>Explore the Microbiome Data</h1>
-<p>That pretty much wraps up what the DADA2 analysis. We next hand off the results to phyloseq so that we can generate some plots and diversity metrics. Phyloseq has a lot of built in functions that are great to use, but I also like to generate the plots by hand. In order to do this, we first need to create a <em>phyloseq</em> object.</p>
+<div id="phyloseq-object" class="section level1">
+<h1>Phyloseq Object</h1>
+<p>That pretty much wraps up what the DADA2 analysis. We next hand off the results to phyloseq so that we can filter using taxonomy info, generate some plots, and calculate diversity metrics. We first need to create a <em>phyloseq</em> object. This object is a unique data structure that hold lots of information about our samples (taxonomy info, sample metadata, number of reads per ASV, etc). We first need to create a data frame that tells phyloseq which samples are in which group. I renamed the samples to make this easy…the RD samples are regular diet, the NIF samples are isoflavone free:</p>
+<pre class="r"><code># Create diet group data frame
+metadata &lt;- tibble(Sample_names = mouse_sample_names) %&gt;% 
+  mutate(Diet = ifelse(str_detect(Sample_names, &quot;RD&quot;), &quot;RD&quot;, &quot;NIF&quot;)) %&gt;% 
+  column_to_rownames(var = &quot;Sample_names&quot;)</code></pre>
+<p>Now that we have the metadata, let’s create the phyloseq object:</p>
+<pre class="r"><code>ps &lt;- phyloseq(otu_table(seqtab_nochim, taxa_are_rows=FALSE), 
+               sample_data(metadata), 
+               tax_table(taxa))
+
+# Rename ASVs to &quot;ASV1, ASV2...&quot;
+# Can look up ASV sequences later
+dna &lt;- Biostrings::DNAStringSet(taxa_names(ps))
+names(dna) &lt;- taxa_names(ps)
+ps &lt;- merge_phyloseq(ps, dna)
+taxa_names(ps) &lt;- paste0(&quot;ASV&quot;, seq(ntaxa(ps)))
+ps</code></pre>
+<pre><code>## phyloseq-class experiment-level object
+## otu_table()   OTU Table:         [ 281 taxa and 48 samples ]
+## sample_data() Sample Data:       [ 48 samples by 1 sample variables ]
+## tax_table()   Taxonomy Table:    [ 281 taxa by 6 taxonomic ranks ]
+## refseq()      DNAStringSet:      [ 281 reference sequences ]</code></pre>
+</div>
+<div id="taxonomic-filtering" class="section level1">
+<h1>Taxonomic Filtering</h1>
+<p>In most cases, the organisms within a sample are well represented in the reference database. When this is the case, it’s advisable to filter out reads/ASVs that cannot be assigned a <em>high-rank</em> taxonomy label. These are most likely contaminates/artifacts that don’t exist in nature and should be removed:</p>
+<pre class="r"><code># Show available ranks in the dataset
+rank_names(ps)</code></pre>
+<pre><code>## [1] &quot;Kingdom&quot; &quot;Phylum&quot;  &quot;Class&quot;   &quot;Order&quot;   &quot;Family&quot;  &quot;Genus&quot;</code></pre>
+<pre class="r"><code># Create table, number of features for each phyla
+table(tax_table(ps)[, &quot;Phylum&quot;], exclude = NULL)</code></pre>
+<pre><code>## 
+##  Actinobacteria   Bacteroidetes   Cyanobacteria      Firmicutes  Proteobacteria 
+##               3               5               1             242               1 
+##     Tenericutes Verrucomicrobia            &lt;NA&gt; 
+##              27               1               1</code></pre>
+<p>If any phylum only has 1 feature, it may be worth filtering out. We also see 1 NA phyla, these are likely artifacts and should be filtered out:</p>
+<pre class="r"><code>ps &lt;- subset_taxa(ps, !is.na(Phylum) &amp; !Phylum %in% c(&quot;&quot;, &quot;Cyanobacteria&quot;, &quot;Verrucomicoriba&quot;, &quot;Proteobacteria&quot;))</code></pre>
+</div>
+<div id="prevalence-filtering" class="section level1">
+<h1>Prevalence Filtering</h1>
+<p>Let’s say for example we saw 100 features in the Bacteroidetes phylum, but upon closer examination, only 1 sample had 100 Firmicutes features and the remaining 47 samples had 0. Then we would probably considere removing Bacteroidetes due to <strong>low prevalence</strong>. Let’s compute the prevalence of each feature first:</p>
+<pre class="r"><code># Compute prevalence of each feature, store as data.frame
+prevdf &lt;- apply(X = otu_table(ps),
+               MARGIN = ifelse(taxa_are_rows(ps), yes = 1, no = 2),
+               FUN = function(x){sum(x &gt; 0)})
+# Add taxonomy and total read counts to this data.frame
+prevdf &lt;- data.frame(Prevalence = prevdf,
+                    TotalAbundance = taxa_sums(ps),
+                    tax_table(ps))</code></pre>
+<p>Then compute the total and average prevalences of each feature:</p>
+<pre class="r"><code>plyr::ddply(prevdf, &quot;Phylum&quot;, function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence))})</code></pre>
+<pre><code>##            Phylum         1    2
+## 1  Actinobacteria  2.000000    6
+## 2   Bacteroidetes 34.400000  172
+## 3      Firmicutes  5.867769 1420
+## 4     Tenericutes  4.037037  109
+## 5 Verrucomicrobia 40.000000   40</code></pre>
+<p>How to read this data using Actinobacteria as an example: any ASV belonging to the Actinobacteria phylum on average was found in 2 of the 48 samples (that’s pretty low). And when you add up the total prevalence numbers of all Actinobacteria ASVs, you get 6. This means that there were a total of 3 Actinobacteria ASVs in our data. Another example would be to look at the Verrucomicrobia phylum. We see that most samples (40 out of 48) had at least one Verrucomicrobia ASV. But since the total prevalence was 40, this means that there was a single Verrucomicrobia ASV in our data and it was present in 40 of our samples.</p>
+<p>We won’t remove any ASVs here (could argue that we should remove Actinobacteria, but I’ll keep it for now). If you did want to remove Actinobacteria for example, you would run the following code:</p>
+<pre class="r"><code># Define phyla to filter
+filterPhyla &lt;- c(&quot;Actinobacteria&quot;)
+
+# Filter entries with unidentified Phylum.
+ps &lt;- subset_taxa(ps, !Phylum %in% filterPhyla)
+ps</code></pre>
+<p>Next, let’s subset all of the ASVs that have a <em>Phylum</em> designation and then compare the prevalence (Frac. Samples), to the total abundance (number of reads associated with each ASV). For these plots, each dot is a distinct ASV. We want to set a threshold that states “if an ASV is below a certain abundance, let’s remove it because”. These ASVs we’ll remove are likely to be low in frequency. Let’s set that threshold to <strong>5%</strong> (dashed line).</p>
+<pre class="r"><code># Subset to the remaining phyla
+prevdf1 &lt;- subset(prevdf, Phylum %in% get_taxa_unique(ps, &quot;Phylum&quot;))
+
+# Plot
+ggplot(prevdf1, aes(TotalAbundance, Prevalence / nsamples(ps),color=Phylum)) +
+  # Include a guess for parameter
+  geom_point(size = 2, alpha = 0.7) +
+  geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2) +
+  scale_x_log10() +  xlab(&quot;Total Abundance&quot;) + ylab(&quot;Prevalence [Frac. Samples]&quot;) +
+  facet_wrap(~Phylum) + theme(legend.position=&quot;none&quot;)</code></pre>
+<p><img src="/post/2020-01-29-microbiome-analysis-with-dada2-and-phyloseq_files/figure-html/unnamed-chunk-20-1.png" width="672" /></p>
+<p>Now let’s physically remove those ASVs below that 5% prevalence threshold:</p>
+<pre class="r"><code># Define prevalence threshold as 5% of total samples
+prevalenceThreshold &lt;- 0.05 * nsamples(ps)
+
+# Execute prevalence filter, using `prune_taxa()` function
+keepTaxa &lt;- rownames(prevdf1)[(prevdf1$Prevalence &gt;= prevalenceThreshold)]
+ps1 &lt;- prune_taxa(keepTaxa, ps)</code></pre>
+<p>And that’s it! You can now save your results to your computer using the following commands:</p>
+<pre class="r"><code>saveRDS(ps1, &quot;ps1.rds&quot;)</code></pre>
+</div>
+<div id="visualization-diversity" class="section level1">
+<h1>Visualization / Diversity</h1>
+<p>Phyloseq comes with a lot of great plot functions that are built around the <code>ggplot2</code> package (ex. plot_ordination(), plot_bar()), but we’ll do it from “scratch” by extracting data frames from the phyloseq object and then plotting.</p>
+<div id="phylum-relative-abundance" class="section level3">
+<h3>Phylum Relative Abundance</h3>
+<p>Before we can plot phylum relative abundance, we need to merge all ASV’s together that are within the same Phylum:</p>
+<pre class="r"><code># Merge everything to the phylum level
+ps1_phylum &lt;- tax_glom(ps1, &quot;Phylum&quot;, NArm = TRUE)</code></pre>
+<p>Then convert to <em>relative abundance</em>:</p>
+<pre class="r"><code># Transform Taxa counts to relative abundance
+ps1_phylum_relabun &lt;- transform_sample_counts(ps1_phylum, function(OTU) OTU/sum(OTU) * 100)</code></pre>
+<p>Then extract the data from the phyloseq object:</p>
+<pre class="r"><code>taxa_abundance_table_phylum &lt;- psmelt(ps1_phylum_relabun)</code></pre>
+<p>And now we can plot a stacked bar plot:</p>
+<pre class="r"><code>StackedBarPlot_phylum &lt;- taxa_abundance_table_phylum %&gt;% 
+  ggplot(aes(x =Sample, y = Abundance, fill = Phylum)) +
+  geom_bar(stat = &quot;identity&quot;) +
+  labs(x = &quot;&quot;,
+       y = &quot;Relative Abundance&quot;,
+       title = &quot;Phylum Relative Abundance&quot;) +
+  facet_grid(~ Diet, scales = &quot;free&quot;) +
+  theme(
+    axis.text.x = element_text(size = 10, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 12)
+  )
+
+StackedBarPlot_phylum</code></pre>
+<p><img src="/post/2020-01-29-microbiome-analysis-with-dada2-and-phyloseq_files/figure-html/unnamed-chunk-26-1.png" width="768" /></p>
+<p>Looks like a difference for sure! Let’s plot each phylum as a box plot:</p>
+<pre class="r"><code>BoxPlot_phylum &lt;- taxa_abundance_table_phylum %&gt;% 
+  ggplot(aes(x =Phylum, y = Abundance, fill = Phylum)) +
+  geom_boxplot() +
+  labs(x = &quot;&quot;,
+       y = &quot;Relative Abundance&quot;,
+       title = &quot;Phylum Relative Abundance&quot;) +
+  facet_grid(~ Diet, scales = &quot;free&quot;) +
+  theme(
+    axis.text.x = element_text(size = 10, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 12)
+  )
+
+BoxPlot_phylum</code></pre>
+<p><img src="/post/2020-01-29-microbiome-analysis-with-dada2-and-phyloseq_files/figure-html/unnamed-chunk-27-1.png" width="768" /></p>
+<p>The ratio of Bacteroidetes to Firmicutes basically flips between the RD and NIF groups…cool!</p>
+</div>
+<div id="genus-relative-abundance" class="section level3">
+<h3>Genus Relative Abundance</h3>
+<p>Let’s do the same thing as above but for the top 10 genera in our study:</p>
+<pre class="r"><code>ps1_genus &lt;- tax_glom(ps1, &quot;Genus&quot;, NArm = TRUE)
+
+# Get top 10 genera
+top10_genera &lt;- names(sort(taxa_sums(ps1_genus), decreasing=TRUE))[1:10]
+
+# Transform Taxa counts to relative abundance
+ps1_genus_relabun &lt;- transform_sample_counts(ps1_genus, function(OTU) OTU/sum(OTU) * 100)
+
+# Extract the top 10 taxa and Regular Diet Samples
+ps1_genus_top10 &lt;- prune_taxa(top10_genera, ps1_genus_relabun)
+
+# Convert into dataframe
+taxa_abundance_table_genus &lt;- psmelt(ps1_genus_top10)</code></pre>
+<p>Plot:</p>
+<pre class="r"><code>StackedBarPlot_genus &lt;- taxa_abundance_table_genus %&gt;% 
+  ggplot(aes(x =Sample, y = Abundance, fill = Genus)) +
+  geom_bar(stat = &quot;identity&quot;) +
+  labs(x = &quot;&quot;,
+       y = &quot;Relative Abundance&quot;,
+       title = &quot;Genus Relative Abundance&quot;) +
+  facet_grid(~ Diet, scales = &quot;free&quot;) +
+  theme(
+    axis.text.x = element_text(size = 10, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 12)
+  )
+
+StackedBarPlot_genus</code></pre>
+<p><img src="/post/2020-01-29-microbiome-analysis-with-dada2-and-phyloseq_files/figure-html/unnamed-chunk-29-1.png" width="960" /></p>
+</div>
 </div>

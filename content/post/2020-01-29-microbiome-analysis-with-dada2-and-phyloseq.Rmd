@@ -439,3 +439,41 @@ BoxPlot_phylum
 The ratio of Bacteroidetes to Firmicutes basically flips between the RD and NIF groups...cool!
 
 ### Genus Relative Abundance
+
+Let's do the same thing as above but for the top 10 genera in our study:
+
+```{r}
+ps1_genus <- tax_glom(ps1, "Genus", NArm = TRUE)
+
+# Get top 10 genera
+top10_genera <- names(sort(taxa_sums(ps1_genus), decreasing=TRUE))[1:10]
+
+# Transform Taxa counts to relative abundance
+ps1_genus_relabun <- transform_sample_counts(ps1_genus, function(OTU) OTU/sum(OTU) * 100)
+
+# Extract the top 10 taxa and Regular Diet Samples
+ps1_genus_top10 <- prune_taxa(top10_genera, ps1_genus_relabun)
+
+# Convert into dataframe
+taxa_abundance_table_genus <- psmelt(ps1_genus_top10)
+```
+
+Plot:
+
+```{r fig.width=10}
+StackedBarPlot_genus <- taxa_abundance_table_genus %>% 
+  ggplot(aes(x =Sample, y = Abundance, fill = Genus)) +
+  geom_bar(stat = "identity") +
+  labs(x = "",
+       y = "Relative Abundance",
+       title = "Genus Relative Abundance") +
+  facet_grid(~ Diet, scales = "free") +
+  theme(
+    axis.text.x = element_text(size = 10, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 12)
+  )
+
+StackedBarPlot_genus
+```
