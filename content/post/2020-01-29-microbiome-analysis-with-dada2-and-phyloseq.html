@@ -3,6 +3,9 @@ title: Microbiome Analysis with DADA2 and Phyloseq
 author: Ryan Johnson
 date: '2020-01-29'
 slug: microbiome-analysis-with-dada2-and-phyloseq
+output:
+  blogdown::html_page:
+    toc: TRUE
 categories:
   - R
   - dada2
@@ -15,5 +18,1701 @@ image:
 ---
 
 
+<div id="TOC">
+<ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#set-up-your-environment">Set Up Your Environment</a><ul>
+<li><a href="#the-microbiome-data">The Microbiome Data</a></li>
+<li><a href="#download-and-install-necessary-r-packages">Download and Install necessary R packages</a></li>
+</ul></li>
+<li><a href="#set-up-working-environment">Set up Working Environment</a><ul>
+<li><a href="#reads">Reads</a></li>
+</ul></li>
+<li><a href="#the-analysis">The Analysis</a><ul>
+<li><a href="#check-read-quality">Check Read Quality</a></li>
+</ul></li>
+<li><a href="#read-filtering">Read Filtering</a></li>
+<li><a href="#learn-the-error-rates-and-infer-sequences">Learn the Error Rates and Infer Sequences</a></li>
+<li><a href="#merge-forward-and-reverse-reads">Merge Forward and Reverse Reads</a></li>
+<li><a href="#construct-sequence-table">Construct Sequence Table</a></li>
+<li><a href="#remove-chimeras">Remove chimeras</a></li>
+<li><a href="#tracking-reads-throughout-pipeline">Tracking Reads throughout Pipeline</a></li>
+<li><a href="#assign-taxonomy-information">Assign Taxonomy Information</a></li>
+<li><a href="#phyloseq-object">Phyloseq Object</a></li>
+<li><a href="#taxonomic-filtering">Taxonomic Filtering</a></li>
+<li><a href="#prevalence-filtering">Prevalence Filtering</a></li>
+<li><a href="#visualization-diversity">Visualization / Diversity</a><ul>
+<li><a href="#phylum-relative-abundance">Phylum Relative Abundance</a></li>
+<li><a href="#genus-relative-abundance">Genus Relative Abundance</a></li>
+</ul></li>
+</ul>
+</div>
 
-<p>Coming soon…</p>
+<div id="introduction" class="section level1">
+<h1>Introduction</h1>
+<p>The purpose of this post will be to guide researchers through a basic analysis of microbiome data using R packages <code>DADA2</code> and <code>Phyloseq</code>. Most concepts will be discussed at a very high level and I won’t spend too much time digging into the weeds of the analysis. For more in-depth analysis, check out this <a href="https://benjjneb.github.io/dada2/tutorial.html">pipeline tutorial</a> which was heavily referenced when creating this tutorial.</p>
+<p>We will be analyzing a very small subset of data that was used in part to look at differences in microbiome structure between mice given a regular diet (<strong>RD</strong>, n = 24) versus a diet with no isoflavones (<strong>NIF</strong>, n = 24). Fecal samples from each mouse were collected 2 weeks after being fed either the RD or NIF diets. Samples were processed in the lab and subjected to Illumina MiSeq 300 base paired-end sequencing. We specifically targeted the V4 variable region of the 16S rRNA gene for sequencing. Reads from each sample were subsampled to 5000 reads/sample just to make the data a bit more manageable.</p>
+</div>
+<div id="set-up-your-environment" class="section level1">
+<h1>Set Up Your Environment</h1>
+<p>Before we can get started, there are a few things you’ll need to download/install:</p>
+<div id="the-microbiome-data" class="section level3">
+<h3>The Microbiome Data</h3>
+<p>The data has been compressed into a single <code>tar.gz</code> file. You’ll need to download it and de-compress it. This can usually be done by simply double-clicking on it.</p>
+<p>Download the data <a href="https://drive.google.com/file/d/1HCcMQASYweEYrjTQUxuHeaQ07FlJf-3U/view?usp=sharing">here</a></p>
+<p>You’ll also need the SILVA reference database in order to assign taxonomy information to each sequence. That is also contained within the above linke (<code>silva_nr_v132_train_set.fa.gz</code>).</p>
+</div>
+<div id="download-and-install-necessary-r-packages" class="section level3">
+<h3>Download and Install necessary R packages</h3>
+<p>In order to get <code>DADA2</code>, <code>Phyloseq</code>, and a few other packages installed on your computer, you need to install them from the internet. Some of these packages can take a while to install, so don’t be alarmed if it take a couple minutes. <code>DADA2</code> and <code>Phyloseq</code> are held within Bioconductor, which a collection of packages used primarily for biological data analysis, so you’ll need to install Bioconductor prior to installing <code>DADA2</code> and <code>Phyloseq</code>. Once all packags are installed, you won’t have access to them until you “turn them on” using the <code>library()</code> command.</p>
+<ul>
+<li><p><span style="color: red;"><strong>DADA2</strong></span>: Please follow the directions from this <a href="https://benjjneb.github.io/dada2/dada-installation.html">website</a>. This is the package that does much of the “heavy” lifting in terms of read quality processing and error rate detection.</p></li>
+<li><p><span style="color: red;"><strong>Phyloseq</strong></span>: Please follow the directions from this <a href="https://bioconductor.org/packages/release/bioc/html/phyloseq.html">website</a>. This package is primarily used to process the high-quality reads, generate diversity statistics, and make pretty figures.</p></li>
+<li><p><span style="color: red;"><strong>Tidyverse</strong></span>: This is a suite of packages that are used for variety of data science needs (read/write files, clean/edit data, make cool figures, etc). To install, simply enter <code>install.packages(&quot;tidyverse&quot;)</code> into your R prompt.</p></li>
+</ul>
+<p>These two blocks of code should install and load all of the packages needed:</p>
+<pre class="r"><code># DADA2 install
+if (!requireNamespace(&quot;BiocManager&quot;, quietly = TRUE))
+    install.packages(&quot;BiocManager&quot;)
+BiocManager::install(&quot;dada2&quot;, version = &quot;3.10&quot;)
+
+# Phyloseq install
+if (!requireNamespace(&quot;BiocManager&quot;, quietly = TRUE))
+    install.packages(&quot;BiocManager&quot;)
+BiocManager::install(&quot;phyloseq&quot;)
+
+# Tidyverse install
+install.packages(&quot;tidyverse&quot;)
+
+# KableExtra for pretty tables
+install.packages(&quot;kableExtra&quot;)</code></pre>
+<pre class="r"><code># Load packages
+library(dada2)
+library(phyloseq)
+library(tidyverse)
+library(kableExtra)</code></pre>
+</div>
+</div>
+<div id="set-up-working-environment" class="section level1">
+<h1>Set up Working Environment</h1>
+<div id="reads" class="section level3">
+<h3>Reads</h3>
+<p>To make things easier, we need to create some variables that will hold the names of our fastq files and the directory for our soon-to-be processed reads. The following code block will store the paths for the forward (R1) and reverse (R2) fastq files (raw and processed):</p>
+<pre class="r"><code># Get path of directory that contains all of the reads
+#  change if reads in separate file on your computer
+reads_path &lt;- &quot;data/mouse_samples&quot; 
+
+# Store path of forward and reverse reads
+Fs_path &lt;- sort(list.files(reads_path, pattern=&quot;R1.fastq&quot;, full.names = TRUE))
+Rs_path &lt;- sort(list.files(reads_path, pattern=&quot;R2.fastq&quot;, full.names = TRUE))
+
+# Create directories for processed forward and reverse reads
+Fs_path_filtered &lt;- file.path(reads_path, &quot;filtered_Fs&quot;)
+Rs_path_filtered &lt;- file.path(reads_path, &quot;filtered_Rs&quot;)</code></pre>
+<p>Extract the sample names as well:</p>
+<pre class="r"><code>mouse_sample_names &lt;- str_replace(string = basename(Fs_path), 
+                                  pattern = &quot;_R1\\.fastq&quot;,
+                                  replacement = &quot;&quot;)</code></pre>
+</div>
+</div>
+<div id="the-analysis" class="section level1">
+<h1>The Analysis</h1>
+<div id="check-read-quality" class="section level3">
+<h3>Check Read Quality</h3>
+<p>We first want to get a general idea of the quality of the reads in our dataset. Let’s look at a random subsampling of the samples:</p>
+<pre class="r"><code>set.seed(1234) # Ensures the same &quot;random&quot; sampling is performed
+
+# Forward Read quality
+plotQualityProfile(Fs_path[sample(1:48, 12, replace = FALSE)])</code></pre>
+<p><img src="/post/2020-01-29-microbiome-analysis-with-dada2-and-phyloseq_files/figure-html/unnamed-chunk-3-1.png" width="672" /></p>
+<pre class="r"><code># Reverse Read quality
+plotQualityProfile(Rs_path[sample(1:48, 12, replace = FALSE)])</code></pre>
+<p><img src="/post/2020-01-29-microbiome-analysis-with-dada2-and-phyloseq_files/figure-html/unnamed-chunk-3-2.png" width="672" /></p>
+<p>We typically don’t want to have the read quality drop below ~30 (focus on the green lines which represent mean quality). But we also need to make sure that our reads have sufficient overlap. The V4 region of the 16S rRNA gene is about 250bp in length, so if we decide to trim off the ends of the sequences due to low quality, the remaining lengths must be &gt;250…actually it needs to be more than that in order to have sufficient overlap. I believe that DADA2 requires at least 12bp overlap, but the more the better.</p>
+<p>For the forward reads, we see the quality drop at around <strong>200bp</strong>. For the reverse reads, which are lower in quality (not atypical), we see the quality drop at around <strong>150bp</strong>. We will use 200 and 150 to trim our seqeunces.</p>
+</div>
+</div>
+<div id="read-filtering" class="section level1">
+<h1>Read Filtering</h1>
+<p>Using the following parameters:</p>
+<ul>
+<li><p><code>maxN=0</code> (DADA2 requires no Ns)</p></li>
+<li><p><code>truncQ=2</code>Truncate reads at the first instance of a quality score less than or equal to truncQ (keeping this as default)</p></li>
+<li><p><code>rm.phix=TRUE</code>: discard reads that match against the phiX genome</p></li>
+<li><p><code>maxEE=c(2,2)</code>: sets the maximum number of “expected errors” allowed in a read, which is a better filter than simply averaging quality scores.</p></li>
+</ul>
+<pre class="r"><code>out &lt;- filterAndTrim(fwd=Fs_path, 
+              filt=Fs_path_filtered,
+              rev=Rs_path, 
+              filt.rev=Rs_path_filtered,
+              truncLen=c(200,150), # forward and reverse read 
+              maxEE=c(2,2), 
+              truncQ=2, 
+              maxN=0, 
+              rm.phix=TRUE,
+              compress=TRUE, 
+              verbose=TRUE, 
+              multithread=TRUE)
+out</code></pre>
+<pre><code>##                reads.in reads.out
+## NIF1_R1.fastq      5000      4013
+## NIF10_R1.fastq     5000      4137
+## NIF11_R1.fastq     5000      4320
+## NIF12_R1.fastq     5000      4075
+## NIF13_R1.fastq     5000      4111
+## NIF14_R1.fastq     5000      4370
+## NIF15_R1.fastq     5000      4075
+## NIF16_R1.fastq     5000      4317
+## NIF17_R1.fastq     5000      4169
+## NIF18_R1.fastq     5000      4108
+## NIF19_R1.fastq     5000      4091
+## NIF2_R1.fastq      5000      4121
+## NIF20_R1.fastq     5000      4121
+## NIF21_R1.fastq     5000      4061
+## NIF22_R1.fastq     5000      4542
+## NIF23_R1.fastq     5000      4203
+## NIF24_R1.fastq     5000      4219
+## NIF3_R1.fastq      5000      4358
+## NIF4_R1.fastq      5000      4247
+## NIF5_R1.fastq      5000      4260
+## NIF6_R1.fastq      5000      4314
+## NIF7_R1.fastq      5000      4066
+## NIF8_R1.fastq      5000      4056
+## NIF9_R1.fastq      5000      4071
+## RD1_R1.fastq       5000      4173
+## RD10_R1.fastq      5000      4264
+## RD11_R1.fastq      5000      4276
+## RD12_R1.fastq      5000      4208
+## RD13_R1.fastq      5000      4272
+## RD14_R1.fastq      5000      4189
+## RD15_R1.fastq      5000      4390
+## RD16_R1.fastq      5000      4182
+## RD17_R1.fastq      5000      4529
+## RD18_R1.fastq      5000      4135
+## RD19_R1.fastq      5000      4090
+## RD2_R1.fastq       5000      4103
+## RD20_R1.fastq      5000      4253
+## RD21_R1.fastq      5000      4214
+## RD22_R1.fastq      5000      4357
+## RD23_R1.fastq      5000      4539
+## RD24_R1.fastq      5000      4212
+## RD3_R1.fastq       5000      4230
+## RD4_R1.fastq       5000      4341
+## RD5_R1.fastq       5000      4233
+## RD6_R1.fastq       5000      4231
+## RD7_R1.fastq       5000      4121
+## RD8_R1.fastq       5000      4244
+## RD9_R1.fastq       5000      4272</code></pre>
+<p>We can see from the output that for most samples, about 600-900 reads were removed from each sample. This seems pretty reasonable. If you find that most of your reads are being thrown out, then you may need to tweak your filtering parameters.</p>
+<p>Let’s also rename the samples (so they don’t have the *_R1.fastq* ending):</p>
+<pre class="r"><code># Get list of filtered sequences
+Fs_filt &lt;- list.files(Fs_path_filtered, full.names = TRUE, pattern = &quot;fastq&quot;)
+Rs_filt &lt;- list.files(Rs_path_filtered, full.names = TRUE, pattern = &quot;fastq&quot;)
+
+# Create names
+names(Fs_filt) &lt;- mouse_sample_names
+names(Rs_filt) &lt;- mouse_sample_names</code></pre>
+</div>
+<div id="learn-the-error-rates-and-infer-sequences" class="section level1">
+<h1>Learn the Error Rates and Infer Sequences</h1>
+<p>High throughput sequencing is not perfect…in fact is pretty error prone. Sometimes you’ll see workflows estimate their error rates by sequencing a mock community (which is a good idea). However, DADA2 leverages some statistical magic (a parametric error model) to estimate sequencing errors by comparing amplicons to the most abundant amplicons present in your sample. The default is to use 1x10<sup>8</sup> (recommended), but to spead things up, I’ll use 1e<sup>7</sup> reads.</p>
+<pre class="r"><code># Forward read estimates
+errF &lt;- learnErrors(Fs_filt, nbases = 1e7, multithread=TRUE)</code></pre>
+<pre><code>## 10805600 total bases in 54028 reads from 13 samples will be used for learning the error rates.</code></pre>
+<pre class="r"><code># Reverse read estimates
+errF &lt;- learnErrors(Rs_filt, nbases = 1e7, multithread=TRUE)</code></pre>
+<pre><code>## 10025100 total bases in 66834 reads from 16 samples will be used for learning the error rates.</code></pre>
+<p>Now that you’ve estimated the error rates, we need to go back to our samples and analyze each read and infer it’s true sequence given the error rates. Basically, it’s going to determine the number of <em>unique</em> reads per sample.</p>
+<pre class="r"><code># Infer forward reads
+dadaFs &lt;- dada(Fs_filt, err=errF, multithread=TRUE)</code></pre>
+<pre><code>## Sample 1 - 4013 reads in 1776 unique sequences.
+## Sample 2 - 4137 reads in 1641 unique sequences.
+## Sample 3 - 4320 reads in 1653 unique sequences.
+## Sample 4 - 4075 reads in 1717 unique sequences.
+## Sample 5 - 4111 reads in 1770 unique sequences.
+## Sample 6 - 4370 reads in 1761 unique sequences.
+## Sample 7 - 4075 reads in 1574 unique sequences.
+## Sample 8 - 4317 reads in 1929 unique sequences.
+## Sample 9 - 4169 reads in 1876 unique sequences.
+## Sample 10 - 4108 reads in 1922 unique sequences.
+## Sample 11 - 4091 reads in 1811 unique sequences.
+## Sample 12 - 4121 reads in 1744 unique sequences.
+## Sample 13 - 4121 reads in 1893 unique sequences.
+## Sample 14 - 4061 reads in 1823 unique sequences.
+## Sample 15 - 4542 reads in 1915 unique sequences.
+## Sample 16 - 4203 reads in 1773 unique sequences.
+## Sample 17 - 4219 reads in 1835 unique sequences.
+## Sample 18 - 4358 reads in 1580 unique sequences.
+## Sample 19 - 4247 reads in 1693 unique sequences.
+## Sample 20 - 4260 reads in 1795 unique sequences.
+## Sample 21 - 4314 reads in 1735 unique sequences.
+## Sample 22 - 4066 reads in 1598 unique sequences.
+## Sample 23 - 4056 reads in 1667 unique sequences.
+## Sample 24 - 4071 reads in 1624 unique sequences.
+## Sample 25 - 4173 reads in 1854 unique sequences.
+## Sample 26 - 4264 reads in 1794 unique sequences.
+## Sample 27 - 4276 reads in 2022 unique sequences.
+## Sample 28 - 4208 reads in 1871 unique sequences.
+## Sample 29 - 4272 reads in 1911 unique sequences.
+## Sample 30 - 4189 reads in 1834 unique sequences.
+## Sample 31 - 4390 reads in 1768 unique sequences.
+## Sample 32 - 4182 reads in 1851 unique sequences.
+## Sample 33 - 4529 reads in 1839 unique sequences.
+## Sample 34 - 4135 reads in 1782 unique sequences.
+## Sample 35 - 4090 reads in 1773 unique sequences.
+## Sample 36 - 4103 reads in 1937 unique sequences.
+## Sample 37 - 4253 reads in 1758 unique sequences.
+## Sample 38 - 4214 reads in 1781 unique sequences.
+## Sample 39 - 4357 reads in 2018 unique sequences.
+## Sample 40 - 4539 reads in 1643 unique sequences.
+## Sample 41 - 4212 reads in 1679 unique sequences.
+## Sample 42 - 4230 reads in 2000 unique sequences.
+## Sample 43 - 4341 reads in 1931 unique sequences.
+## Sample 44 - 4233 reads in 1798 unique sequences.
+## Sample 45 - 4231 reads in 1769 unique sequences.
+## Sample 46 - 4121 reads in 1796 unique sequences.
+## Sample 47 - 4244 reads in 1887 unique sequences.
+## Sample 48 - 4272 reads in 1702 unique sequences.</code></pre>
+<pre class="r"><code># Infer reverse reads
+dadaRs &lt;- dada(Rs_filt, err=errF, multithread=TRUE)</code></pre>
+<pre><code>## Sample 1 - 4013 reads in 1762 unique sequences.
+## Sample 2 - 4137 reads in 1692 unique sequences.
+## Sample 3 - 4320 reads in 1713 unique sequences.
+## Sample 4 - 4075 reads in 1679 unique sequences.
+## Sample 5 - 4111 reads in 1770 unique sequences.
+## Sample 6 - 4370 reads in 1713 unique sequences.
+## Sample 7 - 4075 reads in 1634 unique sequences.
+## Sample 8 - 4317 reads in 1883 unique sequences.
+## Sample 9 - 4169 reads in 1878 unique sequences.
+## Sample 10 - 4108 reads in 1891 unique sequences.
+## Sample 11 - 4091 reads in 1747 unique sequences.
+## Sample 12 - 4121 reads in 1728 unique sequences.
+## Sample 13 - 4121 reads in 1975 unique sequences.
+## Sample 14 - 4061 reads in 1790 unique sequences.
+## Sample 15 - 4542 reads in 1991 unique sequences.
+## Sample 16 - 4203 reads in 1850 unique sequences.
+## Sample 17 - 4219 reads in 1796 unique sequences.
+## Sample 18 - 4358 reads in 1625 unique sequences.
+## Sample 19 - 4247 reads in 1727 unique sequences.
+## Sample 20 - 4260 reads in 1832 unique sequences.
+## Sample 21 - 4314 reads in 1697 unique sequences.
+## Sample 22 - 4066 reads in 1617 unique sequences.
+## Sample 23 - 4056 reads in 1679 unique sequences.
+## Sample 24 - 4071 reads in 1669 unique sequences.
+## Sample 25 - 4173 reads in 1850 unique sequences.
+## Sample 26 - 4264 reads in 1697 unique sequences.
+## Sample 27 - 4276 reads in 1918 unique sequences.
+## Sample 28 - 4208 reads in 1805 unique sequences.
+## Sample 29 - 4272 reads in 1892 unique sequences.
+## Sample 30 - 4189 reads in 1810 unique sequences.
+## Sample 31 - 4390 reads in 1750 unique sequences.
+## Sample 32 - 4182 reads in 1905 unique sequences.
+## Sample 33 - 4529 reads in 1790 unique sequences.
+## Sample 34 - 4135 reads in 1749 unique sequences.
+## Sample 35 - 4090 reads in 1772 unique sequences.
+## Sample 36 - 4103 reads in 1911 unique sequences.
+## Sample 37 - 4253 reads in 1720 unique sequences.
+## Sample 38 - 4214 reads in 1720 unique sequences.
+## Sample 39 - 4357 reads in 2002 unique sequences.
+## Sample 40 - 4539 reads in 1614 unique sequences.
+## Sample 41 - 4212 reads in 1695 unique sequences.
+## Sample 42 - 4230 reads in 1963 unique sequences.
+## Sample 43 - 4341 reads in 1941 unique sequences.
+## Sample 44 - 4233 reads in 1744 unique sequences.
+## Sample 45 - 4231 reads in 1668 unique sequences.
+## Sample 46 - 4121 reads in 1800 unique sequences.
+## Sample 47 - 4244 reads in 1831 unique sequences.
+## Sample 48 - 4272 reads in 1654 unique sequences.</code></pre>
+</div>
+<div id="merge-forward-and-reverse-reads" class="section level1">
+<h1>Merge Forward and Reverse Reads</h1>
+<p>Now that the reads have be de-noised, we can merge the forward and reverse reads together to form a <strong>contig</strong>. Again, the forward and reverse reads need at least 12 base pairs of overlap to be merged. The more overlap the better:</p>
+<pre class="r"><code>mergers &lt;- mergePairs(dadaFs, Fs_path_filtered, 
+                      dadaRs, Rs_path_filtered, verbose=TRUE)</code></pre>
+<pre><code>## 3694 paired-reads (in 36 unique pairings) successfully merged out of 3918 (in 142 pairings) input.</code></pre>
+<pre><code>## 3933 paired-reads (in 21 unique pairings) successfully merged out of 4060 (in 77 pairings) input.</code></pre>
+<pre><code>## 4063 paired-reads (in 36 unique pairings) successfully merged out of 4255 (in 138 pairings) input.</code></pre>
+<pre><code>## 3786 paired-reads (in 29 unique pairings) successfully merged out of 3941 (in 105 pairings) input.</code></pre>
+<pre><code>## 3778 paired-reads (in 30 unique pairings) successfully merged out of 3980 (in 125 pairings) input.</code></pre>
+<pre><code>## 4073 paired-reads (in 37 unique pairings) successfully merged out of 4250 (in 131 pairings) input.</code></pre>
+<pre><code>## 3762 paired-reads (in 35 unique pairings) successfully merged out of 3990 (in 125 pairings) input.</code></pre>
+<pre><code>## 3837 paired-reads (in 44 unique pairings) successfully merged out of 4194 (in 204 pairings) input.</code></pre>
+<pre><code>## 3778 paired-reads (in 35 unique pairings) successfully merged out of 4054 (in 167 pairings) input.</code></pre>
+<pre><code>## 3558 paired-reads (in 44 unique pairings) successfully merged out of 3961 (in 239 pairings) input.</code></pre>
+<pre><code>## 3680 paired-reads (in 41 unique pairings) successfully merged out of 3991 (in 181 pairings) input.</code></pre>
+<pre><code>## 3736 paired-reads (in 32 unique pairings) successfully merged out of 4011 (in 139 pairings) input.</code></pre>
+<pre><code>## 3662 paired-reads (in 51 unique pairings) successfully merged out of 4005 (in 220 pairings) input.</code></pre>
+<pre><code>## 3663 paired-reads (in 36 unique pairings) successfully merged out of 3947 (in 153 pairings) input.</code></pre>
+<pre><code>## 4085 paired-reads (in 47 unique pairings) successfully merged out of 4416 (in 217 pairings) input.</code></pre>
+<pre><code>## 3854 paired-reads (in 37 unique pairings) successfully merged out of 4065 (in 157 pairings) input.</code></pre>
+<pre><code>## 3883 paired-reads (in 41 unique pairings) successfully merged out of 4097 (in 171 pairings) input.</code></pre>
+<pre><code>## 4130 paired-reads (in 33 unique pairings) successfully merged out of 4270 (in 90 pairings) input.</code></pre>
+<pre><code>## 3992 paired-reads (in 33 unique pairings) successfully merged out of 4155 (in 108 pairings) input.</code></pre>
+<pre><code>## 3958 paired-reads (in 33 unique pairings) successfully merged out of 4175 (in 132 pairings) input.</code></pre>
+<pre><code>## 3996 paired-reads (in 33 unique pairings) successfully merged out of 4215 (in 105 pairings) input.</code></pre>
+<pre><code>## 3855 paired-reads (in 36 unique pairings) successfully merged out of 4001 (in 102 pairings) input.</code></pre>
+<pre><code>## 3738 paired-reads (in 34 unique pairings) successfully merged out of 3962 (in 114 pairings) input.</code></pre>
+<pre><code>## 3757 paired-reads (in 30 unique pairings) successfully merged out of 3971 (in 110 pairings) input.</code></pre>
+<pre><code>## 3705 paired-reads (in 41 unique pairings) successfully merged out of 4034 (in 170 pairings) input.</code></pre>
+<pre><code>## 3797 paired-reads (in 33 unique pairings) successfully merged out of 4158 (in 144 pairings) input.</code></pre>
+<pre><code>## 3758 paired-reads (in 49 unique pairings) successfully merged out of 4126 (in 213 pairings) input.</code></pre>
+<pre><code>## 3664 paired-reads (in 40 unique pairings) successfully merged out of 4060 (in 173 pairings) input.</code></pre>
+<pre><code>## 3894 paired-reads (in 58 unique pairings) successfully merged out of 4152 (in 181 pairings) input.</code></pre>
+<pre><code>## 3754 paired-reads (in 45 unique pairings) successfully merged out of 4056 (in 175 pairings) input.</code></pre>
+<pre><code>## 3988 paired-reads (in 44 unique pairings) successfully merged out of 4218 (in 156 pairings) input.</code></pre>
+<pre><code>## 3719 paired-reads (in 50 unique pairings) successfully merged out of 4064 (in 198 pairings) input.</code></pre>
+<pre><code>## 3986 paired-reads (in 40 unique pairings) successfully merged out of 4351 (in 144 pairings) input.</code></pre>
+<pre><code>## 3761 paired-reads (in 42 unique pairings) successfully merged out of 4035 (in 139 pairings) input.</code></pre>
+<pre><code>## 3642 paired-reads (in 38 unique pairings) successfully merged out of 3966 (in 174 pairings) input.</code></pre>
+<pre><code>## 3583 paired-reads (in 45 unique pairings) successfully merged out of 3966 (in 206 pairings) input.</code></pre>
+<pre><code>## 3799 paired-reads (in 42 unique pairings) successfully merged out of 4116 (in 159 pairings) input.</code></pre>
+<pre><code>## 3749 paired-reads (in 41 unique pairings) successfully merged out of 4104 (in 160 pairings) input.</code></pre>
+<pre><code>## 3888 paired-reads (in 53 unique pairings) successfully merged out of 4194 (in 210 pairings) input.</code></pre>
+<pre><code>## 4224 paired-reads (in 45 unique pairings) successfully merged out of 4386 (in 119 pairings) input.</code></pre>
+<pre><code>## 3720 paired-reads (in 44 unique pairings) successfully merged out of 4044 (in 123 pairings) input.</code></pre>
+<pre><code>## 3660 paired-reads (in 49 unique pairings) successfully merged out of 4067 (in 216 pairings) input.</code></pre>
+<pre><code>## 3925 paired-reads (in 53 unique pairings) successfully merged out of 4218 (in 164 pairings) input.</code></pre>
+<pre><code>## 3865 paired-reads (in 45 unique pairings) successfully merged out of 4118 (in 172 pairings) input.</code></pre>
+<pre><code>## 3807 paired-reads (in 39 unique pairings) successfully merged out of 4117 (in 135 pairings) input.</code></pre>
+<pre><code>## 3757 paired-reads (in 46 unique pairings) successfully merged out of 4006 (in 166 pairings) input.</code></pre>
+<pre><code>## 3799 paired-reads (in 53 unique pairings) successfully merged out of 4145 (in 194 pairings) input.</code></pre>
+<pre><code>## 3817 paired-reads (in 43 unique pairings) successfully merged out of 4153 (in 157 pairings) input.</code></pre>
+</div>
+<div id="construct-sequence-table" class="section level1">
+<h1>Construct Sequence Table</h1>
+<p>We can now construct an amplicon sequence variant table (ASV) table. It’s important to know the difference between an ASV and an OTU…but I’ll leave that up to you to figure out :)</p>
+<p>This table is a matrix with each row representing the samples, columns are the various ASVs, and each cell shows the number of that specific ASV within each sample.</p>
+<pre class="r"><code>seqtab &lt;- makeSequenceTable(mergers)</code></pre>
+</div>
+<div id="remove-chimeras" class="section level1">
+<h1>Remove chimeras</h1>
+<p>Next dada2 will align each ASV to the other ASVs, and if an ASV’s left and right side align to two separate more abundant ASVs, the it will be flagged as a chimera and removed.</p>
+<pre class="r"><code>seqtab_nochim &lt;- removeBimeraDenovo(seqtab, method=&quot;consensus&quot;, multithread=TRUE, verbose=TRUE)</code></pre>
+<pre><code>## Identified 42 bimeras out of 323 input sequences.</code></pre>
+<p>Now let’s add up all of the reads from the original <code>seqtab</code> and the chimera-remove <code>seqtab_nochim</code> and see what percentage of merged sequence reads were considered chimeras.</p>
+<pre class="r"><code>num_chim_removed &lt;- 1 - (sum(seqtab_nochim)/sum(seqtab))
+
+num_chim_removed</code></pre>
+<pre><code>## [1] 0.01666921</code></pre>
+<p>You can see from the difference between the number of columns in <code>seqtab</code> (323) and <code>seqtab_nochim</code> (281) that while 42 ASVs were removed, it only represented 0.0166692 percent of the total number of merged sequence reads.</p>
+</div>
+<div id="tracking-reads-throughout-pipeline" class="section level1">
+<h1>Tracking Reads throughout Pipeline</h1>
+<p>As a final check, it is nice to see how many reads you started with, and how many were lost/merged at each step along the way.</p>
+<pre class="r"><code>getN &lt;- function(x) sum(getUniques(x))
+track &lt;- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab_nochim))
+colnames(track) &lt;- c(&quot;input&quot;, &quot;filtered&quot;, &quot;denoisedF&quot;, &quot;denoisedR&quot;, &quot;merged&quot;, &quot;nonchim&quot;)
+rownames(track) &lt;- mouse_sample_names
+kableExtra::kable(track)</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align:left;">
+</th>
+<th style="text-align:right;">
+input
+</th>
+<th style="text-align:right;">
+filtered
+</th>
+<th style="text-align:right;">
+denoisedF
+</th>
+<th style="text-align:right;">
+denoisedR
+</th>
+<th style="text-align:right;">
+merged
+</th>
+<th style="text-align:right;">
+nonchim
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+NIF1
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4013
+</td>
+<td style="text-align:right;">
+3937
+</td>
+<td style="text-align:right;">
+3981
+</td>
+<td style="text-align:right;">
+3694
+</td>
+<td style="text-align:right;">
+3604
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF10
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4137
+</td>
+<td style="text-align:right;">
+4075
+</td>
+<td style="text-align:right;">
+4112
+</td>
+<td style="text-align:right;">
+3933
+</td>
+<td style="text-align:right;">
+3898
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF11
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4320
+</td>
+<td style="text-align:right;">
+4273
+</td>
+<td style="text-align:right;">
+4293
+</td>
+<td style="text-align:right;">
+4063
+</td>
+<td style="text-align:right;">
+4001
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF12
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4075
+</td>
+<td style="text-align:right;">
+3980
+</td>
+<td style="text-align:right;">
+4026
+</td>
+<td style="text-align:right;">
+3786
+</td>
+<td style="text-align:right;">
+3761
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF13
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4111
+</td>
+<td style="text-align:right;">
+4007
+</td>
+<td style="text-align:right;">
+4073
+</td>
+<td style="text-align:right;">
+3778
+</td>
+<td style="text-align:right;">
+3738
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF14
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4370
+</td>
+<td style="text-align:right;">
+4300
+</td>
+<td style="text-align:right;">
+4311
+</td>
+<td style="text-align:right;">
+4073
+</td>
+<td style="text-align:right;">
+4040
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF15
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4075
+</td>
+<td style="text-align:right;">
+4015
+</td>
+<td style="text-align:right;">
+4039
+</td>
+<td style="text-align:right;">
+3762
+</td>
+<td style="text-align:right;">
+3725
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF16
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4317
+</td>
+<td style="text-align:right;">
+4236
+</td>
+<td style="text-align:right;">
+4258
+</td>
+<td style="text-align:right;">
+3837
+</td>
+<td style="text-align:right;">
+3684
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF17
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4169
+</td>
+<td style="text-align:right;">
+4089
+</td>
+<td style="text-align:right;">
+4129
+</td>
+<td style="text-align:right;">
+3778
+</td>
+<td style="text-align:right;">
+3746
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF18
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4108
+</td>
+<td style="text-align:right;">
+4017
+</td>
+<td style="text-align:right;">
+4042
+</td>
+<td style="text-align:right;">
+3558
+</td>
+<td style="text-align:right;">
+3505
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF19
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4091
+</td>
+<td style="text-align:right;">
+4013
+</td>
+<td style="text-align:right;">
+4060
+</td>
+<td style="text-align:right;">
+3680
+</td>
+<td style="text-align:right;">
+3637
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF2
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4121
+</td>
+<td style="text-align:right;">
+4040
+</td>
+<td style="text-align:right;">
+4080
+</td>
+<td style="text-align:right;">
+3736
+</td>
+<td style="text-align:right;">
+3716
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF20
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4121
+</td>
+<td style="text-align:right;">
+4052
+</td>
+<td style="text-align:right;">
+4068
+</td>
+<td style="text-align:right;">
+3662
+</td>
+<td style="text-align:right;">
+3645
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF21
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4061
+</td>
+<td style="text-align:right;">
+3972
+</td>
+<td style="text-align:right;">
+4023
+</td>
+<td style="text-align:right;">
+3663
+</td>
+<td style="text-align:right;">
+3642
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF22
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4542
+</td>
+<td style="text-align:right;">
+4479
+</td>
+<td style="text-align:right;">
+4475
+</td>
+<td style="text-align:right;">
+4085
+</td>
+<td style="text-align:right;">
+4036
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF23
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4203
+</td>
+<td style="text-align:right;">
+4118
+</td>
+<td style="text-align:right;">
+4127
+</td>
+<td style="text-align:right;">
+3854
+</td>
+<td style="text-align:right;">
+3832
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF24
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4219
+</td>
+<td style="text-align:right;">
+4133
+</td>
+<td style="text-align:right;">
+4172
+</td>
+<td style="text-align:right;">
+3883
+</td>
+<td style="text-align:right;">
+3845
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF3
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4358
+</td>
+<td style="text-align:right;">
+4290
+</td>
+<td style="text-align:right;">
+4332
+</td>
+<td style="text-align:right;">
+4130
+</td>
+<td style="text-align:right;">
+4043
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF4
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4247
+</td>
+<td style="text-align:right;">
+4179
+</td>
+<td style="text-align:right;">
+4221
+</td>
+<td style="text-align:right;">
+3992
+</td>
+<td style="text-align:right;">
+3950
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF5
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4260
+</td>
+<td style="text-align:right;">
+4197
+</td>
+<td style="text-align:right;">
+4233
+</td>
+<td style="text-align:right;">
+3958
+</td>
+<td style="text-align:right;">
+3945
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF6
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4314
+</td>
+<td style="text-align:right;">
+4240
+</td>
+<td style="text-align:right;">
+4281
+</td>
+<td style="text-align:right;">
+3996
+</td>
+<td style="text-align:right;">
+3996
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF7
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4066
+</td>
+<td style="text-align:right;">
+4018
+</td>
+<td style="text-align:right;">
+4041
+</td>
+<td style="text-align:right;">
+3855
+</td>
+<td style="text-align:right;">
+3837
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF8
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4056
+</td>
+<td style="text-align:right;">
+3998
+</td>
+<td style="text-align:right;">
+4015
+</td>
+<td style="text-align:right;">
+3738
+</td>
+<td style="text-align:right;">
+3720
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+NIF9
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4071
+</td>
+<td style="text-align:right;">
+3991
+</td>
+<td style="text-align:right;">
+4042
+</td>
+<td style="text-align:right;">
+3757
+</td>
+<td style="text-align:right;">
+3742
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD1
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4173
+</td>
+<td style="text-align:right;">
+4061
+</td>
+<td style="text-align:right;">
+4133
+</td>
+<td style="text-align:right;">
+3705
+</td>
+<td style="text-align:right;">
+3670
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD10
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4264
+</td>
+<td style="text-align:right;">
+4183
+</td>
+<td style="text-align:right;">
+4230
+</td>
+<td style="text-align:right;">
+3797
+</td>
+<td style="text-align:right;">
+3743
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD11
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4276
+</td>
+<td style="text-align:right;">
+4167
+</td>
+<td style="text-align:right;">
+4229
+</td>
+<td style="text-align:right;">
+3758
+</td>
+<td style="text-align:right;">
+3680
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD12
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4208
+</td>
+<td style="text-align:right;">
+4090
+</td>
+<td style="text-align:right;">
+4160
+</td>
+<td style="text-align:right;">
+3664
+</td>
+<td style="text-align:right;">
+3556
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD13
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4272
+</td>
+<td style="text-align:right;">
+4171
+</td>
+<td style="text-align:right;">
+4245
+</td>
+<td style="text-align:right;">
+3894
+</td>
+<td style="text-align:right;">
+3805
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD14
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4189
+</td>
+<td style="text-align:right;">
+4108
+</td>
+<td style="text-align:right;">
+4132
+</td>
+<td style="text-align:right;">
+3754
+</td>
+<td style="text-align:right;">
+3676
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD15
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4390
+</td>
+<td style="text-align:right;">
+4252
+</td>
+<td style="text-align:right;">
+4346
+</td>
+<td style="text-align:right;">
+3988
+</td>
+<td style="text-align:right;">
+3858
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD16
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4182
+</td>
+<td style="text-align:right;">
+4090
+</td>
+<td style="text-align:right;">
+4141
+</td>
+<td style="text-align:right;">
+3719
+</td>
+<td style="text-align:right;">
+3659
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD17
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4529
+</td>
+<td style="text-align:right;">
+4395
+</td>
+<td style="text-align:right;">
+4474
+</td>
+<td style="text-align:right;">
+3986
+</td>
+<td style="text-align:right;">
+3946
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD18
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4135
+</td>
+<td style="text-align:right;">
+4065
+</td>
+<td style="text-align:right;">
+4099
+</td>
+<td style="text-align:right;">
+3761
+</td>
+<td style="text-align:right;">
+3728
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD19
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4090
+</td>
+<td style="text-align:right;">
+4007
+</td>
+<td style="text-align:right;">
+4043
+</td>
+<td style="text-align:right;">
+3642
+</td>
+<td style="text-align:right;">
+3602
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD2
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4103
+</td>
+<td style="text-align:right;">
+4019
+</td>
+<td style="text-align:right;">
+4038
+</td>
+<td style="text-align:right;">
+3583
+</td>
+<td style="text-align:right;">
+3527
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD20
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4253
+</td>
+<td style="text-align:right;">
+4164
+</td>
+<td style="text-align:right;">
+4192
+</td>
+<td style="text-align:right;">
+3799
+</td>
+<td style="text-align:right;">
+3764
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD21
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4214
+</td>
+<td style="text-align:right;">
+4124
+</td>
+<td style="text-align:right;">
+4183
+</td>
+<td style="text-align:right;">
+3749
+</td>
+<td style="text-align:right;">
+3691
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD22
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4357
+</td>
+<td style="text-align:right;">
+4252
+</td>
+<td style="text-align:right;">
+4289
+</td>
+<td style="text-align:right;">
+3888
+</td>
+<td style="text-align:right;">
+3837
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD23
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4539
+</td>
+<td style="text-align:right;">
+4418
+</td>
+<td style="text-align:right;">
+4491
+</td>
+<td style="text-align:right;">
+4224
+</td>
+<td style="text-align:right;">
+3978
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD24
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4212
+</td>
+<td style="text-align:right;">
+4114
+</td>
+<td style="text-align:right;">
+4129
+</td>
+<td style="text-align:right;">
+3720
+</td>
+<td style="text-align:right;">
+3429
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD3
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4230
+</td>
+<td style="text-align:right;">
+4119
+</td>
+<td style="text-align:right;">
+4157
+</td>
+<td style="text-align:right;">
+3660
+</td>
+<td style="text-align:right;">
+3629
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD4
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4341
+</td>
+<td style="text-align:right;">
+4247
+</td>
+<td style="text-align:right;">
+4298
+</td>
+<td style="text-align:right;">
+3925
+</td>
+<td style="text-align:right;">
+3838
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD5
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4233
+</td>
+<td style="text-align:right;">
+4145
+</td>
+<td style="text-align:right;">
+4195
+</td>
+<td style="text-align:right;">
+3865
+</td>
+<td style="text-align:right;">
+3838
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD6
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4231
+</td>
+<td style="text-align:right;">
+4133
+</td>
+<td style="text-align:right;">
+4196
+</td>
+<td style="text-align:right;">
+3807
+</td>
+<td style="text-align:right;">
+3724
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD7
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4121
+</td>
+<td style="text-align:right;">
+4043
+</td>
+<td style="text-align:right;">
+4078
+</td>
+<td style="text-align:right;">
+3757
+</td>
+<td style="text-align:right;">
+3640
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD8
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4244
+</td>
+<td style="text-align:right;">
+4150
+</td>
+<td style="text-align:right;">
+4223
+</td>
+<td style="text-align:right;">
+3799
+</td>
+<td style="text-align:right;">
+3680
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RD9
+</td>
+<td style="text-align:right;">
+5000
+</td>
+<td style="text-align:right;">
+4272
+</td>
+<td style="text-align:right;">
+4182
+</td>
+<td style="text-align:right;">
+4226
+</td>
+<td style="text-align:right;">
+3817
+</td>
+<td style="text-align:right;">
+3667
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="assign-taxonomy-information" class="section level1">
+<h1>Assign Taxonomy Information</h1>
+<p>We can now assign taxonomy information to each ASV in our study. To do this, we’ll use DADA2’s native implementation of the naive Bayesian classifier method. This step may take a minute or two.</p>
+<pre class="r"><code>taxa &lt;- assignTaxonomy(seqtab_nochim, &quot;data/mouse_samples/silva_nr_v132_train_set.fa.gz&quot;, multithread=TRUE)</code></pre>
+</div>
+<div id="phyloseq-object" class="section level1">
+<h1>Phyloseq Object</h1>
+<p>That pretty much wraps up what the DADA2 analysis. We next hand off the results to phyloseq so that we can filter using taxonomy info, generate some plots, and calculate diversity metrics. We first need to create a <em>phyloseq</em> object. This object is a unique data structure that hold lots of information about our samples (taxonomy info, sample metadata, number of reads per ASV, etc). We first need to create a data frame that tells phyloseq which samples are in which group. I renamed the samples to make this easy…the RD samples are regular diet, the NIF samples are isoflavone free:</p>
+<pre class="r"><code># Create diet group data frame
+metadata &lt;- tibble(Sample_names = mouse_sample_names) %&gt;% 
+  mutate(Diet = ifelse(str_detect(Sample_names, &quot;RD&quot;), &quot;RD&quot;, &quot;NIF&quot;)) %&gt;% 
+  column_to_rownames(var = &quot;Sample_names&quot;)</code></pre>
+<p>Now that we have the metadata, let’s create the phyloseq object:</p>
+<pre class="r"><code>ps &lt;- phyloseq(otu_table(seqtab_nochim, taxa_are_rows=FALSE), 
+               sample_data(metadata), 
+               tax_table(taxa))
+
+# Rename ASVs to &quot;ASV1, ASV2...&quot;
+# Can look up ASV sequences later
+dna &lt;- Biostrings::DNAStringSet(taxa_names(ps))
+names(dna) &lt;- taxa_names(ps)
+ps &lt;- merge_phyloseq(ps, dna)
+taxa_names(ps) &lt;- paste0(&quot;ASV&quot;, seq(ntaxa(ps)))
+ps</code></pre>
+<pre><code>## phyloseq-class experiment-level object
+## otu_table()   OTU Table:         [ 281 taxa and 48 samples ]
+## sample_data() Sample Data:       [ 48 samples by 1 sample variables ]
+## tax_table()   Taxonomy Table:    [ 281 taxa by 6 taxonomic ranks ]
+## refseq()      DNAStringSet:      [ 281 reference sequences ]</code></pre>
+</div>
+<div id="taxonomic-filtering" class="section level1">
+<h1>Taxonomic Filtering</h1>
+<p>In most cases, the organisms within a sample are well represented in the reference database. When this is the case, it’s advisable to filter out reads/ASVs that cannot be assigned a <em>high-rank</em> taxonomy label. These are most likely contaminates/artifacts that don’t exist in nature and should be removed:</p>
+<pre class="r"><code># Show available ranks in the dataset
+rank_names(ps)</code></pre>
+<pre><code>## [1] &quot;Kingdom&quot; &quot;Phylum&quot;  &quot;Class&quot;   &quot;Order&quot;   &quot;Family&quot;  &quot;Genus&quot;</code></pre>
+<pre class="r"><code># Create table, number of features for each phyla
+table(tax_table(ps)[, &quot;Phylum&quot;], exclude = NULL)</code></pre>
+<pre><code>## 
+##  Actinobacteria   Bacteroidetes   Cyanobacteria      Firmicutes  Proteobacteria 
+##               3               5               1             242               1 
+##     Tenericutes Verrucomicrobia            &lt;NA&gt; 
+##              27               1               1</code></pre>
+<p>If any phylum only has 1 feature, it may be worth filtering out. We also see 1 NA phyla, these are likely artifacts and should be filtered out:</p>
+<pre class="r"><code>ps &lt;- subset_taxa(ps, !is.na(Phylum) &amp; !Phylum %in% c(&quot;&quot;, &quot;Cyanobacteria&quot;, &quot;Verrucomicoriba&quot;, &quot;Proteobacteria&quot;))</code></pre>
+</div>
+<div id="prevalence-filtering" class="section level1">
+<h1>Prevalence Filtering</h1>
+<p>Let’s say for example we saw 100 features in the Bacteroidetes phylum, but upon closer examination, only 1 sample had 100 Firmicutes features and the remaining 47 samples had 0. Then we would probably considere removing Bacteroidetes due to <strong>low prevalence</strong>. Let’s compute the prevalence of each feature first:</p>
+<pre class="r"><code># Compute prevalence of each feature, store as data.frame
+prevdf &lt;- apply(X = otu_table(ps),
+               MARGIN = ifelse(taxa_are_rows(ps), yes = 1, no = 2),
+               FUN = function(x){sum(x &gt; 0)})
+# Add taxonomy and total read counts to this data.frame
+prevdf &lt;- data.frame(Prevalence = prevdf,
+                    TotalAbundance = taxa_sums(ps),
+                    tax_table(ps))</code></pre>
+<p>Then compute the total and average prevalences of each feature:</p>
+<pre class="r"><code>plyr::ddply(prevdf, &quot;Phylum&quot;, function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence))})</code></pre>
+<pre><code>##            Phylum         1    2
+## 1  Actinobacteria  2.000000    6
+## 2   Bacteroidetes 34.400000  172
+## 3      Firmicutes  5.867769 1420
+## 4     Tenericutes  4.037037  109
+## 5 Verrucomicrobia 40.000000   40</code></pre>
+<p>How to read this data using Actinobacteria as an example: any ASV belonging to the Actinobacteria phylum on average was found in 2 of the 48 samples (that’s pretty low). And when you add up the total prevalence numbers of all Actinobacteria ASVs, you get 6. This means that there were a total of 3 Actinobacteria ASVs in our data. Another example would be to look at the Verrucomicrobia phylum. We see that most samples (40 out of 48) had at least one Verrucomicrobia ASV. But since the total prevalence was 40, this means that there was a single Verrucomicrobia ASV in our data and it was present in 40 of our samples.</p>
+<p>We won’t remove any ASVs here (could argue that we should remove Actinobacteria, but I’ll keep it for now). If you did want to remove Actinobacteria for example, you would run the following code:</p>
+<pre class="r"><code># Define phyla to filter
+filterPhyla &lt;- c(&quot;Actinobacteria&quot;)
+
+# Filter entries with unidentified Phylum.
+ps &lt;- subset_taxa(ps, !Phylum %in% filterPhyla)
+ps</code></pre>
+<p>Next, let’s subset all of the ASVs that have a <em>Phylum</em> designation and then compare the prevalence (Frac. Samples), to the total abundance (number of reads associated with each ASV). For these plots, each dot is a distinct ASV. We want to set a threshold that states “if an ASV is below a certain abundance, let’s remove it because”. These ASVs we’ll remove are likely to be low in frequency. Let’s set that threshold to <strong>5%</strong> (dashed line).</p>
+<pre class="r"><code># Subset to the remaining phyla
+prevdf1 &lt;- subset(prevdf, Phylum %in% get_taxa_unique(ps, &quot;Phylum&quot;))
+
+# Plot
+ggplot(prevdf1, aes(TotalAbundance, Prevalence / nsamples(ps),color=Phylum)) +
+  # Include a guess for parameter
+  geom_point(size = 2, alpha = 0.7) +
+  geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2) +
+  scale_x_log10() +  xlab(&quot;Total Abundance&quot;) + ylab(&quot;Prevalence [Frac. Samples]&quot;) +
+  facet_wrap(~Phylum) + theme(legend.position=&quot;none&quot;)</code></pre>
+<p><img src="/post/2020-01-29-microbiome-analysis-with-dada2-and-phyloseq_files/figure-html/unnamed-chunk-20-1.png" width="672" /></p>
+<p>Now let’s physically remove those ASVs below that 5% prevalence threshold:</p>
+<pre class="r"><code># Define prevalence threshold as 5% of total samples
+prevalenceThreshold &lt;- 0.05 * nsamples(ps)
+
+# Execute prevalence filter, using `prune_taxa()` function
+keepTaxa &lt;- rownames(prevdf1)[(prevdf1$Prevalence &gt;= prevalenceThreshold)]
+ps1 &lt;- prune_taxa(keepTaxa, ps)</code></pre>
+<p>And that’s it! You can now save your results to your computer using the following commands:</p>
+<pre class="r"><code>saveRDS(ps1, &quot;ps1.rds&quot;)</code></pre>
+</div>
+<div id="visualization-diversity" class="section level1">
+<h1>Visualization / Diversity</h1>
+<p>Phyloseq comes with a lot of great plot functions that are built around the <code>ggplot2</code> package (ex. plot_ordination(), plot_bar()), but we’ll do it from “scratch” by extracting data frames from the phyloseq object and then plotting.</p>
+<div id="phylum-relative-abundance" class="section level3">
+<h3>Phylum Relative Abundance</h3>
+<p>Before we can plot phylum relative abundance, we need to merge all ASV’s together that are within the same Phylum:</p>
+<pre class="r"><code># Merge everything to the phylum level
+ps1_phylum &lt;- tax_glom(ps1, &quot;Phylum&quot;, NArm = TRUE)</code></pre>
+<p>Then convert to <em>relative abundance</em>:</p>
+<pre class="r"><code># Transform Taxa counts to relative abundance
+ps1_phylum_relabun &lt;- transform_sample_counts(ps1_phylum, function(OTU) OTU/sum(OTU) * 100)</code></pre>
+<p>Then extract the data from the phyloseq object:</p>
+<pre class="r"><code>taxa_abundance_table_phylum &lt;- psmelt(ps1_phylum_relabun)</code></pre>
+<p>And now we can plot a stacked bar plot:</p>
+<pre class="r"><code>StackedBarPlot_phylum &lt;- taxa_abundance_table_phylum %&gt;% 
+  ggplot(aes(x =Sample, y = Abundance, fill = Phylum)) +
+  geom_bar(stat = &quot;identity&quot;) +
+  labs(x = &quot;&quot;,
+       y = &quot;Relative Abundance&quot;,
+       title = &quot;Phylum Relative Abundance&quot;) +
+  facet_grid(~ Diet, scales = &quot;free&quot;) +
+  theme(
+    axis.text.x = element_text(size = 10, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 12)
+  )
+
+StackedBarPlot_phylum</code></pre>
+<p><img src="/post/2020-01-29-microbiome-analysis-with-dada2-and-phyloseq_files/figure-html/unnamed-chunk-26-1.png" width="768" /></p>
+<p>Looks like a difference for sure! Let’s plot each phylum as a box plot:</p>
+<pre class="r"><code>BoxPlot_phylum &lt;- taxa_abundance_table_phylum %&gt;% 
+  ggplot(aes(x =Phylum, y = Abundance, fill = Phylum)) +
+  geom_boxplot() +
+  labs(x = &quot;&quot;,
+       y = &quot;Relative Abundance&quot;,
+       title = &quot;Phylum Relative Abundance&quot;) +
+  facet_grid(~ Diet, scales = &quot;free&quot;) +
+  theme(
+    axis.text.x = element_text(size = 10, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 12)
+  )
+
+BoxPlot_phylum</code></pre>
+<p><img src="/post/2020-01-29-microbiome-analysis-with-dada2-and-phyloseq_files/figure-html/unnamed-chunk-27-1.png" width="768" /></p>
+<p>The ratio of Bacteroidetes to Firmicutes basically flips between the RD and NIF groups…cool!</p>
+</div>
+<div id="genus-relative-abundance" class="section level3">
+<h3>Genus Relative Abundance</h3>
+<p>Let’s do the same thing as above but for the top 10 genera in our study:</p>
+<pre class="r"><code>ps1_genus &lt;- tax_glom(ps1, &quot;Genus&quot;, NArm = TRUE)
+
+# Get top 10 genera
+top10_genera &lt;- names(sort(taxa_sums(ps1_genus), decreasing=TRUE))[1:10]
+
+# Transform Taxa counts to relative abundance
+ps1_genus_relabun &lt;- transform_sample_counts(ps1_genus, function(OTU) OTU/sum(OTU) * 100)
+
+# Extract the top 10 taxa and Regular Diet Samples
+ps1_genus_top10 &lt;- prune_taxa(top10_genera, ps1_genus_relabun)
+
+# Convert into dataframe
+taxa_abundance_table_genus &lt;- psmelt(ps1_genus_top10)</code></pre>
+<p>Plot:</p>
+<pre class="r"><code>StackedBarPlot_genus &lt;- taxa_abundance_table_genus %&gt;% 
+  ggplot(aes(x =Sample, y = Abundance, fill = Genus)) +
+  geom_bar(stat = &quot;identity&quot;) +
+  labs(x = &quot;&quot;,
+       y = &quot;Relative Abundance&quot;,
+       title = &quot;Genus Relative Abundance&quot;) +
+  facet_grid(~ Diet, scales = &quot;free&quot;) +
+  theme(
+    axis.text.x = element_text(size = 10, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 12)
+  )
+
+StackedBarPlot_genus</code></pre>
+<p><img src="/post/2020-01-29-microbiome-analysis-with-dada2-and-phyloseq_files/figure-html/unnamed-chunk-29-1.png" width="960" /></p>
+</div>
+</div>

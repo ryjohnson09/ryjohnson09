@@ -3,6 +3,9 @@ title: Microbiome Analysis with DADA2 and Phyloseq
 author: Ryan Johnson
 date: '2020-01-29'
 slug: microbiome-analysis-with-dada2-and-phyloseq
+output:
+  blogdown::html_page:
+    toc: TRUE
 categories:
   - R
   - dada2
@@ -14,4 +17,463 @@ image:
   focal_point: ''
 ---
 
-Coming soon...
+# Introduction
+
+The purpose of this post will be to guide researchers through a basic analysis of microbiome data using R packages `DADA2` and `Phyloseq`. Most concepts will be discussed at a very high level and I won't spend too much time digging into the weeds of the analysis. For more in-depth analysis, check out this [pipeline tutorial](https://benjjneb.github.io/dada2/tutorial.html) which was heavily referenced when creating this tutorial.
+
+We will be analyzing a very small subset of data that was used in part to look at differences in microbiome structure between mice given a regular diet (**RD**, n = 24) versus a diet with no isoflavones (**NIF**, n = 24). Fecal samples from each mouse were collected 2 weeks after being fed either the RD or NIF diets. Samples were processed in the lab and subjected to Illumina MiSeq 300 base paired-end sequencing. We specifically targeted the V4 variable region of the 16S rRNA gene for sequencing. Reads from each sample were subsampled to 5000 reads/sample just to make the data a bit more manageable.
+
+# Set Up Your Environment
+
+Before we can get started, there are a few things you'll need to download/install:
+
+### The Microbiome Data
+
+The data has been compressed into a single `tar.gz` file. You'll need to download it and de-compress it. This can usually be done by simply double-clicking on it.
+
+Download the data [here](https://drive.google.com/file/d/1HCcMQASYweEYrjTQUxuHeaQ07FlJf-3U/view?usp=sharing)
+
+You'll also need the SILVA reference database in order to assign taxonomy information to each sequence. That is also contained within the above linke (`silva_nr_v132_train_set.fa.gz`).
+
+### Download and Install necessary R packages
+
+In order to get `DADA2`, `Phyloseq`, and a few other packages installed on your computer, you need to install them from the internet. Some of these packages can take a while to install, so don't be alarmed if it take a couple minutes. `DADA2` and `Phyloseq` are held within Bioconductor, which a collection of packages used primarily for biological data analysis, so you'll need to install Bioconductor prior to installing `DADA2` and `Phyloseq`. Once all packags are installed, you won't have access to them until you "turn them on" using the `library()` command.
+
+* <span style="color: red;">**DADA2**</span>: Please follow the directions from this [website](https://benjjneb.github.io/dada2/dada-installation.html). This is the package that does much of the "heavy" lifting in terms of read quality processing and error rate detection.
+
+* <span style="color: red;">**Phyloseq**</span>: Please follow the directions from this [website](https://bioconductor.org/packages/release/bioc/html/phyloseq.html). This package is primarily used to process the high-quality reads, generate diversity statistics, and make pretty figures.
+
+* <span style="color: red;">**Tidyverse**</span>: This is a suite of packages that are used for variety of data science needs (read/write files, clean/edit data, make cool figures, etc). To install, simply enter `install.packages("tidyverse")` into your R prompt.
+
+These two blocks of code should install and load all of the packages needed:
+
+```{r install_packages, eval=FALSE, message=FALSE, warning=FALSE}
+# DADA2 install
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("dada2", version = "3.10")
+
+# Phyloseq install
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("phyloseq")
+
+# Tidyverse install
+install.packages("tidyverse")
+
+# KableExtra for pretty tables
+install.packages("kableExtra")
+```
+
+
+```{r load_libraries, warning=FALSE, message=FALSE}
+# Load packages
+library(dada2)
+library(phyloseq)
+library(tidyverse)
+library(kableExtra)
+```
+
+
+
+# Set up Working Environment
+
+### Reads
+
+To make things easier, we need to create some variables that will hold the names of our fastq files and the directory for our soon-to-be processed reads. The following code block will store the paths for the forward (R1) and reverse (R2) fastq files (raw and processed):
+
+```{r}
+# Get path of directory that contains all of the reads
+#  change if reads in separate file on your computer
+reads_path <- "data/mouse_samples" 
+
+# Store path of forward and reverse reads
+Fs_path <- sort(list.files(reads_path, pattern="R1.fastq", full.names = TRUE))
+Rs_path <- sort(list.files(reads_path, pattern="R2.fastq", full.names = TRUE))
+
+# Create directories for processed forward and reverse reads
+Fs_path_filtered <- file.path(reads_path, "filtered_Fs")
+Rs_path_filtered <- file.path(reads_path, "filtered_Rs")
+```
+
+
+Extract the sample names as well:
+
+```{r}
+mouse_sample_names <- str_replace(string = basename(Fs_path), 
+                                  pattern = "_R1\\.fastq",
+                                  replacement = "")
+```
+
+
+
+# The Analysis
+
+### Check Read Quality
+
+We first want to get a general idea of the quality of the reads in our dataset. Let's look at a random subsampling of the samples:
+
+```{r cache=TRUE}
+set.seed(1234) # Ensures the same "random" sampling is performed
+
+# Forward Read quality
+plotQualityProfile(Fs_path[sample(1:48, 12, replace = FALSE)])
+
+# Reverse Read quality
+plotQualityProfile(Rs_path[sample(1:48, 12, replace = FALSE)])
+```
+
+We typically don't want to have the read quality drop below ~30 (focus on the green lines which represent mean quality). But we also need to make sure that our reads have sufficient overlap. The V4 region of the 16S rRNA gene is about 250bp in length, so if we decide to trim off the ends of the sequences due to low quality, the remaining lengths must be >250...actually it needs to be more than that in order to have sufficient overlap. I believe that DADA2 requires at least 12bp overlap, but the more the better.
+
+For the forward reads, we see the quality drop at around **200bp**. For the reverse reads, which are lower in quality (not atypical), we see the quality drop at around **150bp**. We will use 200 and 150 to trim our seqeunces.
+
+
+# Read Filtering
+
+Using the following parameters:
+
+* `maxN=0` (DADA2 requires no Ns)
+
+* `truncQ=2`Truncate reads at the first instance of a quality score less than or equal to truncQ (keeping this as default)
+
+* `rm.phix=TRUE`: discard reads that match against the phiX genome
+
+* `maxEE=c(2,2)`: sets the maximum number of “expected errors” allowed in a read, which is a better filter than simply averaging quality scores.
+
+```{r cache=TRUE}
+out <- filterAndTrim(fwd=Fs_path, 
+              filt=Fs_path_filtered,
+              rev=Rs_path, 
+              filt.rev=Rs_path_filtered,
+              truncLen=c(200,150), # forward and reverse read 
+              maxEE=c(2,2), 
+              truncQ=2, 
+              maxN=0, 
+              rm.phix=TRUE,
+              compress=TRUE, 
+              verbose=TRUE, 
+              multithread=TRUE)
+out
+```
+
+We can see from the output that for most samples, about 600-900 reads were removed from each sample. This seems pretty reasonable. If you find that most of your reads are being thrown out, then you may need to tweak your filtering parameters.
+
+Let's also rename the samples (so they don't have the *_R1.fastq* ending):
+
+```{r}
+# Get list of filtered sequences
+Fs_filt <- list.files(Fs_path_filtered, full.names = TRUE, pattern = "fastq")
+Rs_filt <- list.files(Rs_path_filtered, full.names = TRUE, pattern = "fastq")
+
+# Create names
+names(Fs_filt) <- mouse_sample_names
+names(Rs_filt) <- mouse_sample_names
+```
+
+
+# Learn the Error Rates and Infer Sequences
+
+High throughput sequencing is not perfect...in fact is pretty error prone. Sometimes you'll see workflows estimate their error rates by sequencing a mock community (which is a good idea). However, DADA2 leverages some statistical magic (a parametric error model) to estimate sequencing errors by comparing amplicons to the most abundant amplicons present in your sample. The default is to use 1x10^8^ (recommended), but to spead things up, I'll use 1e^7^ reads.
+
+```{r cache=TRUE}
+# Forward read estimates
+errF <- learnErrors(Fs_filt, nbases = 1e7, multithread=TRUE)
+
+# Reverse read estimates
+errF <- learnErrors(Rs_filt, nbases = 1e7, multithread=TRUE)
+```
+
+Now that you've estimated the error rates, we need to go back to our samples and analyze each read and infer it's true sequence given the error rates. Basically, it's going to determine the number of *unique* reads per sample.
+
+```{r cache=TRUE}
+# Infer forward reads
+dadaFs <- dada(Fs_filt, err=errF, multithread=TRUE)
+
+# Infer reverse reads
+dadaRs <- dada(Rs_filt, err=errF, multithread=TRUE)
+```
+
+# Merge Forward and Reverse Reads
+
+Now that the reads have be de-noised, we can merge the forward and reverse reads together to form a **contig**. Again, the forward and reverse reads need at least 12 base pairs of overlap to be merged. The more overlap the better:
+
+```{r cache=TRUE}
+mergers <- mergePairs(dadaFs, Fs_path_filtered, 
+                      dadaRs, Rs_path_filtered, verbose=TRUE)
+```
+
+# Construct Sequence Table
+
+We can now construct an amplicon sequence variant table (ASV) table. It's important to know the difference between an ASV and an OTU...but I'll leave that up to you to figure out :)
+
+This table is a matrix with each row representing the samples, columns are the various ASVs, and each cell shows the number of that specific ASV within each sample.
+
+```{r cache=TRUE}
+seqtab <- makeSequenceTable(mergers)
+```
+
+
+# Remove chimeras
+
+Next dada2 will align each ASV to the other ASVs, and if an ASV's left and right side align to two separate more abundant ASVs, the it will be flagged as a chimera and removed.
+
+```{r cache=TRUE}
+seqtab_nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=TRUE, verbose=TRUE)
+```
+
+Now let's add up all of the reads from the original `seqtab` and the chimera-remove `seqtab_nochim` and see what percentage of merged sequence reads were considered chimeras.
+
+```{r}
+num_chim_removed <- 1 - (sum(seqtab_nochim)/sum(seqtab))
+
+num_chim_removed
+```
+
+You can see from the difference between the number of columns in `seqtab` (`r dim(seqtab)[2]`) and `seqtab_nochim` (`r dim(seqtab_nochim)[2]`) that while `r dim(seqtab)[2] - dim(seqtab_nochim)[2]` ASVs were removed, it only represented `r num_chim_removed` percent of the total number of merged sequence reads.
+
+# Tracking Reads throughout Pipeline
+
+As a final check, it is nice to see how many reads you started with, and how many were lost/merged at each step along the way.
+
+```{r}
+getN <- function(x) sum(getUniques(x))
+track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab_nochim))
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track) <- mouse_sample_names
+kableExtra::kable(track)
+```
+
+# Assign Taxonomy Information
+
+We can now assign taxonomy information to each ASV in our study. To do this, we'll use DADA2's native implementation of the naive Bayesian classifier method. This step may take a minute or two.
+
+```{r cache=TRUE}
+taxa <- assignTaxonomy(seqtab_nochim, "data/mouse_samples/silva_nr_v132_train_set.fa.gz", multithread=TRUE)
+```
+
+
+# Phyloseq Object
+
+That pretty much wraps up what the DADA2 analysis. We next hand off the results to phyloseq so that we can filter using taxonomy info, generate some plots, and calculate diversity metrics. We first need to create a *phyloseq* object. This object is a unique data structure that hold lots of information about our samples (taxonomy info, sample metadata, number of reads per ASV, etc). We first need to create a data frame that tells phyloseq which samples are in which group. I renamed the samples to make this easy...the RD samples are regular diet, the NIF samples are isoflavone free:
+
+```{r}
+# Create diet group data frame
+metadata <- tibble(Sample_names = mouse_sample_names) %>% 
+  mutate(Diet = ifelse(str_detect(Sample_names, "RD"), "RD", "NIF")) %>% 
+  column_to_rownames(var = "Sample_names")
+```
+
+Now that we have the metadata, let's create the phyloseq object:
+
+```{r cache=TRUE}
+ps <- phyloseq(otu_table(seqtab_nochim, taxa_are_rows=FALSE), 
+               sample_data(metadata), 
+               tax_table(taxa))
+
+# Rename ASVs to "ASV1, ASV2..."
+# Can look up ASV sequences later
+dna <- Biostrings::DNAStringSet(taxa_names(ps))
+names(dna) <- taxa_names(ps)
+ps <- merge_phyloseq(ps, dna)
+taxa_names(ps) <- paste0("ASV", seq(ntaxa(ps)))
+ps
+```
+
+# Taxonomic Filtering
+
+In most cases, the organisms within a sample are well represented in the reference database. When this is the case, it's advisable to filter out reads/ASVs that cannot be assigned a *high-rank* taxonomy label. These are most likely contaminates/artifacts that don't exist in nature and should be removed:
+
+```{r}
+# Show available ranks in the dataset
+rank_names(ps)
+```
+
+```{r Show feature per phyla}
+# Create table, number of features for each phyla
+table(tax_table(ps)[, "Phylum"], exclude = NULL)
+```
+
+If any phylum only has 1 feature, it may be worth filtering out. We also see 1 NA phyla, these are likely artifacts and should be filtered out:
+
+```{r Remove uncharacterized features}
+ps <- subset_taxa(ps, !is.na(Phylum) & !Phylum %in% c("", "Cyanobacteria", "Verrucomicoriba", "Proteobacteria"))
+```
+
+
+# Prevalence Filtering
+
+Let's say for example we saw 100 features in the Bacteroidetes phylum, but upon closer examination, only 1 sample had 100 Firmicutes features and the remaining 47 samples had 0. Then we would probably considere removing Bacteroidetes due to **low prevalence**. Let's compute the prevalence of each feature first:
+
+```{r}
+# Compute prevalence of each feature, store as data.frame
+prevdf <- apply(X = otu_table(ps),
+               MARGIN = ifelse(taxa_are_rows(ps), yes = 1, no = 2),
+               FUN = function(x){sum(x > 0)})
+# Add taxonomy and total read counts to this data.frame
+prevdf <- data.frame(Prevalence = prevdf,
+                    TotalAbundance = taxa_sums(ps),
+                    tax_table(ps))
+```
+
+Then compute the total and average prevalences of each feature:
+
+```{r}
+plyr::ddply(prevdf, "Phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence))})
+```
+
+How to read this data using Actinobacteria as an example: any ASV belonging to the Actinobacteria phylum on average was found in 2 of the 48 samples (that's pretty low). And when you add up the total prevalence numbers of all Actinobacteria ASVs, you get 6. This means that there were a total of 3 Actinobacteria ASVs in our data. Another example would be to look at the Verrucomicrobia phylum. We see that most samples (40 out of 48) had at least one Verrucomicrobia ASV. But since the total prevalence was 40, this means that there was a single Verrucomicrobia ASV in our data and it was present in 40 of our samples.
+
+We won't remove any ASVs here (could argue that we should remove Actinobacteria, but I'll keep it for now). If you did want to remove Actinobacteria for example, you would run the following code:
+
+```{r eval=FALSE}
+# Define phyla to filter
+filterPhyla <- c("Actinobacteria")
+
+# Filter entries with unidentified Phylum.
+ps <- subset_taxa(ps, !Phylum %in% filterPhyla)
+ps
+```
+
+
+Next, let's subset all of the ASVs that have a *Phylum* designation and then compare the prevalence (Frac. Samples), to the total abundance (number of reads associated with each ASV). For these plots, each dot is a distinct ASV. We want to set a threshold that states "if an ASV is below a certain abundance, let's remove it because". These ASVs we'll remove are likely to be low in frequency. Let's set that threshold to **5%** (dashed line).
+
+```{r fig.height=9}
+# Subset to the remaining phyla
+prevdf1 <- subset(prevdf, Phylum %in% get_taxa_unique(ps, "Phylum"))
+
+# Plot
+ggplot(prevdf1, aes(TotalAbundance, Prevalence / nsamples(ps),color=Phylum)) +
+  # Include a guess for parameter
+  geom_point(size = 2, alpha = 0.7) +
+  geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2) +
+  scale_x_log10() +  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
+  facet_wrap(~Phylum) + theme(legend.position="none")
+```
+
+Now let's physically remove those ASVs below that 5% prevalence threshold:
+
+```{r}
+# Define prevalence threshold as 5% of total samples
+prevalenceThreshold <- 0.05 * nsamples(ps)
+
+# Execute prevalence filter, using `prune_taxa()` function
+keepTaxa <- rownames(prevdf1)[(prevdf1$Prevalence >= prevalenceThreshold)]
+ps1 <- prune_taxa(keepTaxa, ps)
+```
+
+
+And that's it! You can now save your results to your computer using the following commands:
+
+```{r eval=FALSE}
+saveRDS(ps1, "ps1.rds")
+```
+
+
+
+# Visualization / Diversity
+
+Phyloseq comes with a lot of great plot functions that are built around the `ggplot2` package (ex. plot_ordination(), plot_bar()), but we'll do it from "scratch" by extracting data frames from the phyloseq object and then plotting.
+
+### Phylum Relative Abundance
+
+Before we can plot phylum relative abundance, we need to merge all ASV's together that are within the same Phylum:
+
+```{r cache=TRUE}
+# Merge everything to the phylum level
+ps1_phylum <- tax_glom(ps1, "Phylum", NArm = TRUE)
+```
+
+Then convert to *relative abundance*:
+
+```{r}
+# Transform Taxa counts to relative abundance
+ps1_phylum_relabun <- transform_sample_counts(ps1_phylum, function(OTU) OTU/sum(OTU) * 100)
+```
+
+Then extract the data from the phyloseq object:
+
+```{r}
+taxa_abundance_table_phylum <- psmelt(ps1_phylum_relabun)
+```
+
+And now we can plot a stacked bar plot:
+
+```{r fig.width=8}
+StackedBarPlot_phylum <- taxa_abundance_table_phylum %>% 
+  ggplot(aes(x =Sample, y = Abundance, fill = Phylum)) +
+  geom_bar(stat = "identity") +
+  labs(x = "",
+       y = "Relative Abundance",
+       title = "Phylum Relative Abundance") +
+  facet_grid(~ Diet, scales = "free") +
+  theme(
+    axis.text.x = element_text(size = 10, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 12)
+  )
+
+StackedBarPlot_phylum
+```
+
+Looks like a difference for sure! Let's plot each phylum as a box plot:
+
+```{r fig.width=8}
+BoxPlot_phylum <- taxa_abundance_table_phylum %>% 
+  ggplot(aes(x =Phylum, y = Abundance, fill = Phylum)) +
+  geom_boxplot() +
+  labs(x = "",
+       y = "Relative Abundance",
+       title = "Phylum Relative Abundance") +
+  facet_grid(~ Diet, scales = "free") +
+  theme(
+    axis.text.x = element_text(size = 10, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 12)
+  )
+
+BoxPlot_phylum
+```
+
+The ratio of Bacteroidetes to Firmicutes basically flips between the RD and NIF groups...cool!
+
+### Genus Relative Abundance
+
+Let's do the same thing as above but for the top 10 genera in our study:
+
+```{r}
+ps1_genus <- tax_glom(ps1, "Genus", NArm = TRUE)
+
+# Get top 10 genera
+top10_genera <- names(sort(taxa_sums(ps1_genus), decreasing=TRUE))[1:10]
+
+# Transform Taxa counts to relative abundance
+ps1_genus_relabun <- transform_sample_counts(ps1_genus, function(OTU) OTU/sum(OTU) * 100)
+
+# Extract the top 10 taxa and Regular Diet Samples
+ps1_genus_top10 <- prune_taxa(top10_genera, ps1_genus_relabun)
+
+# Convert into dataframe
+taxa_abundance_table_genus <- psmelt(ps1_genus_top10)
+```
+
+Plot:
+
+```{r fig.width=10}
+StackedBarPlot_genus <- taxa_abundance_table_genus %>% 
+  ggplot(aes(x =Sample, y = Abundance, fill = Genus)) +
+  geom_bar(stat = "identity") +
+  labs(x = "",
+       y = "Relative Abundance",
+       title = "Genus Relative Abundance") +
+  facet_grid(~ Diet, scales = "free") +
+  theme(
+    axis.text.x = element_text(size = 10, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 12)
+  )
+
+StackedBarPlot_genus
+```
