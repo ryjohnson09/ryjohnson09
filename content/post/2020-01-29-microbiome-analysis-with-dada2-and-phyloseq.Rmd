@@ -33,6 +33,8 @@ The data has been compressed into a single `tar.gz` file. You'll need to downloa
 
 Download the data [here](https://drive.google.com/file/d/1HCcMQASYweEYrjTQUxuHeaQ07FlJf-3U/view?usp=sharing)
 
+You'll also need the SILVA reference database in order to assign taxonomy information to each sequence. That is also contained within the above linke (`silva_nr_v132_train_set.fa.gz`).
+
 ### Download and Install necessary R packages
 
 In order to get `DADA2`, `Phyloseq`, and a few other packages installed on your computer, you need to install them from the internet. Some of these packages can take a while to install, so don't be alarmed if it take a couple minutes. `DADA2` and `Phyloseq` are held within Bioconductor, which a collection of packages used primarily for biological data analysis, so you'll need to install Bioconductor prior to installing `DADA2` and `Phyloseq`. Once all packags are installed, you won't have access to them until you "turn them on" using the `library()` command.
@@ -95,7 +97,7 @@ Rs_path_filtered <- file.path(reads_path, "filtered_Rs")
 ```
 
 
-It will also be useful later on to store the sample names without the R1/R2 and fastq annotation:
+Extract the sample names as well:
 
 ```{r}
 mouse_sample_names <- str_replace(string = basename(Fs_path), 
@@ -156,6 +158,18 @@ out
 
 We can see from the output that for most samples, about 600-900 reads were removed from each sample. This seems pretty reasonable. If you find that most of your reads are being thrown out, then you may need to tweak your filtering parameters.
 
+Let's also rename the samples (so they don't have the *_R1.fastq* ending):
+
+```{r}
+# Get list of filtered sequences
+Fs_filt <- list.files(Fs_path_filtered, full.names = TRUE, pattern = "fastq")
+Rs_filt <- list.files(Rs_path_filtered, full.names = TRUE, pattern = "fastq")
+
+# Create names
+names(Fs_filt) <- mouse_sample_names
+names(Rs_filt) <- mouse_sample_names
+```
+
 
 # Learn the Error Rates and Infer Sequences
 
@@ -163,20 +177,20 @@ High throughput sequencing is not perfect...in fact is pretty error prone. Somet
 
 ```{r cache=TRUE}
 # Forward read estimates
-errF <- learnErrors(Fs_path_filtered, nbases = 1e7, multithread=TRUE)
+errF <- learnErrors(Fs_filt, nbases = 1e7, multithread=TRUE)
 
 # Reverse read estimates
-errF <- learnErrors(Rs_path_filtered, nbases = 1e7, multithread=TRUE)
+errF <- learnErrors(Rs_filt, nbases = 1e7, multithread=TRUE)
 ```
 
 Now that you've estimated the error rates, we need to go back to our samples and analyze each read and infer it's true sequence given the error rates. Basically, it's going to determine the number of *unique* reads per sample.
 
 ```{r cache=TRUE}
 # Infer forward reads
-dadaFs <- dada(Fs_path_filtered, err=errF, multithread=TRUE)
+dadaFs <- dada(Fs_filt, err=errF, multithread=TRUE)
 
 # Infer reverse reads
-dadaRs <- dada(Rs_path_filtered, err=errF, multithread=TRUE)
+dadaRs <- dada(Rs_filt, err=errF, multithread=TRUE)
 ```
 
 # Merge Forward and Reverse Reads
@@ -228,4 +242,98 @@ colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "n
 rownames(track) <- mouse_sample_names
 kableExtra::kable(track)
 ```
+
+# Assign Taxonomy Information
+
+We can now assign taxonomy information to each ASV in our study. To do this, we'll use DADA2's native implementation of the naive Bayesian classifier method. This step may take a minute or two.
+
+```{r cache=TRUE}
+taxa <- assignTaxonomy(seqtab_nochim, "data/mouse_samples/silva_nr_v132_train_set.fa.gz", multithread=TRUE)
+```
+
+
+# Phyloseq Object
+
+That pretty much wraps up what the DADA2 analysis. We next hand off the results to phyloseq so that we can filter using taxonomy info, generate some plots, and calculate diversity metrics. We first need to create a *phyloseq* object. This object is a unique data structure that hold lots of information about our samples (taxonomy info, sample metadata, number of reads per ASV, etc). We first need to create a data frame that tells phyloseq which samples are in which group. I renamed the samples to make this easy...the RD samples are regular diet, the NIF samples are isoflavone free:
+
+```{r}
+# Create diet group data frame
+metadata <- tibble(Sample_names = mouse_sample_names) %>% 
+  mutate(Diet = ifelse(str_detect(Sample_names, "RD"), "RD", "NIF")) %>% 
+  column_to_rownames(var = "Sample_names")
+```
+
+Now that we have the metadata, let's create the phyloseq object:
+
+```{r cache=TRUE}
+ps <- phyloseq(otu_table(seqtab_nochim, taxa_are_rows=FALSE), 
+               sample_data(metadata), 
+               tax_table(taxa))
+
+# Rename ASVs to "ASV1, ASV2..."
+# Can look up ASV sequences later
+dna <- Biostrings::DNAStringSet(taxa_names(ps))
+names(dna) <- taxa_names(ps)
+ps <- merge_phyloseq(ps, dna)
+taxa_names(ps) <- paste0("ASV", seq(ntaxa(ps)))
+ps
+```
+
+# Taxonomic Filtering
+
+In most cases, the organisms within a sample are well represented in the reference database. When this is the case, it's advisable to filter out reads/ASVs that cannot be assigned a *high-rank* taxonomy label. These are most likely contaminates/artifacts that don't exist in nature and should be removed:
+
+```{r}
+# Show available ranks in the dataset
+rank_names(ps)
+```
+
+```{r Show feature per phyla}
+# Create table, number of features for each phyla
+table(tax_table(ps)[, "Phylum"], exclude = NULL)
+```
+
+If any phylum only has 1 feature, it may be worth filtering out. We also see 1 NA phyla, these are likely artifacts and should be filtered out:
+
+```{r Remove uncharacterized features}
+ps <- subset_taxa(ps, !is.na(Phylum) & !Phylum %in% c("", "Cyanobacteria", "Verrucomicoriba", "Proteobacteria"))
+```
+
+
+# Prevalence Filtering
+
+Let's say for example we saw 100 features in the Bacteroidetes phylum, but upon closer examination, only 1 sample had 100 Firmicutes features and the remaining 47 samples had 0. Then we would probably considere removing Bacteroidetes due to **low prevalence**. Let's compute the prevalence of each feature first:
+
+```{r}
+# Compute prevalence of each feature, store as data.frame
+prevdf <- apply(X = otu_table(ps),
+               MARGIN = ifelse(taxa_are_rows(ps), yes = 1, no = 2),
+               FUN = function(x){sum(x > 0)})
+# Add taxonomy and total read counts to this data.frame
+prevdf <- data.frame(Prevalence = prevdf,
+                    TotalAbundance = taxa_sums(ps),
+                    tax_table(ps))
+```
+
+Then compute the total and average prevalences of each feature:
+
+```{r}
+plyr::ddply(prevdf, "Phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence))})
+```
+
+How to read this data using Actinobacteria as an example: any ASV belonging to the Actinobacteria phylum on average was found in 2 of the 48 samples (that's pretty low). And when you add up the total prevalence numbers of all Actinobacteria ASVs, you get 6. This means that there were a total of 3 Actinobacteria ASVs in our data. Another example would be to look at the Verrucomicrobia phylum. We see that most samples (40 out of 48) had at least one Verrucomicrobia ASV. But since the total prevalence was 40, this means that there was a single Verrucomicrobia ASV in our data and it was present in 40 of our samples.
+
+We won't remove any ASVs here (could argue that we could remove Actinobacteria), but I'll keep it for now. If you did want to remove it, you would run the following code:
+
+```{r eval=FALSE}
+# Define phyla to filter
+filterPhyla <- c("Actinobacteria")
+
+# Filter entries with unidentified Phylum.
+ps <- subset_taxa(ps, !Phylum %in% filterPhyla)
+ps
+```
+
+
+
 

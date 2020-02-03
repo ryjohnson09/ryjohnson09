@@ -37,6 +37,8 @@ image:
 <li><a href="#construct-sequence-table">Construct Sequence Table</a></li>
 <li><a href="#remove-chimeras">Remove chimeras</a></li>
 <li><a href="#tracking-reads-throughout-pipeline">Tracking Reads throughout Pipeline</a></li>
+<li><a href="#assign-taxonomy-information">Assign Taxonomy Information</a></li>
+<li><a href="#explore-the-microbiome-data">Explore the Microbiome Data</a></li>
 </ul>
 </div>
 
@@ -52,6 +54,7 @@ image:
 <h3>The Microbiome Data</h3>
 <p>The data has been compressed into a single <code>tar.gz</code> file. You’ll need to download it and de-compress it. This can usually be done by simply double-clicking on it.</p>
 <p>Download the data <a href="https://drive.google.com/file/d/1HCcMQASYweEYrjTQUxuHeaQ07FlJf-3U/view?usp=sharing">here</a></p>
+<p>You’ll also need the SILVA reference database in order to assign taxonomy information to each sequence. That is also contained within the above linke (<code>silva_nr_v132_train_set.fa.gz</code>).</p>
 </div>
 <div id="download-and-install-necessary-r-packages" class="section level3">
 <h3>Download and Install necessary R packages</h3>
@@ -1519,4 +1522,13 @@ RD9
 </tr>
 </tbody>
 </table>
+</div>
+<div id="assign-taxonomy-information" class="section level1">
+<h1>Assign Taxonomy Information</h1>
+<p>We can now assign taxonomy information to each ASV in our study. To do this, we’ll use DADA2’s native implementation of the naive Bayesian classifier method. This step may take a minute or two.</p>
+<pre class="r"><code>taxa &lt;- assignTaxonomy(seqtab_nochim, &quot;data/mouse_samples/silva_nr_v132_train_set.fa.gz&quot;, multithread=TRUE)</code></pre>
+</div>
+<div id="explore-the-microbiome-data" class="section level1">
+<h1>Explore the Microbiome Data</h1>
+<p>That pretty much wraps up what the DADA2 analysis. We next hand off the results to phyloseq so that we can generate some plots and diversity metrics. Phyloseq has a lot of built in functions that are great to use, but I also like to generate the plots by hand. In order to do this, we first need to create a <em>phyloseq</em> object.</p>
 </div>
