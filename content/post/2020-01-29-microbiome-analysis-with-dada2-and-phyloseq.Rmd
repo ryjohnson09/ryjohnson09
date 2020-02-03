@@ -323,7 +323,7 @@ plyr::ddply(prevdf, "Phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$P
 
 How to read this data using Actinobacteria as an example: any ASV belonging to the Actinobacteria phylum on average was found in 2 of the 48 samples (that's pretty low). And when you add up the total prevalence numbers of all Actinobacteria ASVs, you get 6. This means that there were a total of 3 Actinobacteria ASVs in our data. Another example would be to look at the Verrucomicrobia phylum. We see that most samples (40 out of 48) had at least one Verrucomicrobia ASV. But since the total prevalence was 40, this means that there was a single Verrucomicrobia ASV in our data and it was present in 40 of our samples.
 
-We won't remove any ASVs here (could argue that we could remove Actinobacteria), but I'll keep it for now. If you did want to remove it, you would run the following code:
+We won't remove any ASVs here (could argue that we should remove Actinobacteria, but I'll keep it for now). If you did want to remove Actinobacteria for example, you would run the following code:
 
 ```{r eval=FALSE}
 # Define phyla to filter
@@ -335,5 +335,107 @@ ps
 ```
 
 
+Next, let's subset all of the ASVs that have a *Phylum* designation and then compare the prevalence (Frac. Samples), to the total abundance (number of reads associated with each ASV). For these plots, each dot is a distinct ASV. We want to set a threshold that states "if an ASV is below a certain abundance, let's remove it because". These ASVs we'll remove are likely to be low in frequency. Let's set that threshold to **5%** (dashed line).
+
+```{r fig.height=9}
+# Subset to the remaining phyla
+prevdf1 <- subset(prevdf, Phylum %in% get_taxa_unique(ps, "Phylum"))
+
+# Plot
+ggplot(prevdf1, aes(TotalAbundance, Prevalence / nsamples(ps),color=Phylum)) +
+  # Include a guess for parameter
+  geom_point(size = 2, alpha = 0.7) +
+  geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2) +
+  scale_x_log10() +  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
+  facet_wrap(~Phylum) + theme(legend.position="none")
+```
+
+Now let's physically remove those ASVs below that 5% prevalence threshold:
+
+```{r}
+# Define prevalence threshold as 5% of total samples
+prevalenceThreshold <- 0.05 * nsamples(ps)
+
+# Execute prevalence filter, using `prune_taxa()` function
+keepTaxa <- rownames(prevdf1)[(prevdf1$Prevalence >= prevalenceThreshold)]
+ps1 <- prune_taxa(keepTaxa, ps)
+```
 
 
+And that's it! You can now save your results to your computer using the following commands:
+
+```{r eval=FALSE}
+saveRDS(ps1, "ps1.rds")
+```
+
+
+
+# Visualization / Diversity
+
+Phyloseq comes with a lot of great plot functions that are built around the `ggplot2` package (ex. plot_ordination(), plot_bar()), but we'll do it from "scratch" by extracting data frames from the phyloseq object and then plotting.
+
+### Phylum Relative Abundance
+
+Before we can plot phylum relative abundance, we need to merge all ASV's together that are within the same Phylum:
+
+```{r cache=TRUE}
+# Merge everything to the phylum level
+ps1_phylum <- tax_glom(ps1, "Phylum", NArm = TRUE)
+```
+
+Then convert to *relative abundance*:
+
+```{r}
+# Transform Taxa counts to relative abundance
+ps1_phylum_relabun <- transform_sample_counts(ps1_phylum, function(OTU) OTU/sum(OTU) * 100)
+```
+
+Then extract the data from the phyloseq object:
+
+```{r}
+taxa_abundance_table_phylum <- psmelt(ps1_phylum_relabun)
+```
+
+And now we can plot a stacked bar plot:
+
+```{r fig.width=8}
+StackedBarPlot_phylum <- taxa_abundance_table_phylum %>% 
+  ggplot(aes(x =Sample, y = Abundance, fill = Phylum)) +
+  geom_bar(stat = "identity") +
+  labs(x = "",
+       y = "Relative Abundance",
+       title = "Phylum Relative Abundance") +
+  facet_grid(~ Diet, scales = "free") +
+  theme(
+    axis.text.x = element_text(size = 10, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 12)
+  )
+
+StackedBarPlot_phylum
+```
+
+Looks like a difference for sure! Let's plot each phylum as a box plot:
+
+```{r fig.width=8}
+BoxPlot_phylum <- taxa_abundance_table_phylum %>% 
+  ggplot(aes(x =Phylum, y = Abundance, fill = Phylum)) +
+  geom_boxplot() +
+  labs(x = "",
+       y = "Relative Abundance",
+       title = "Phylum Relative Abundance") +
+  facet_grid(~ Diet, scales = "free") +
+  theme(
+    axis.text.x = element_text(size = 10, angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 12)
+  )
+
+BoxPlot_phylum
+```
+
+The ratio of Bacteroidetes to Firmicutes basically flips between the RD and NIF groups...cool!
+
+### Genus Relative Abundance
